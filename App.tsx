@@ -437,7 +437,7 @@ Hãy bắt đầu ngay bây giờ.
     const analysisMessage: ChatMessage = { role: 'user', content: initialPrompt };
     const waitingMessage: ChatMessage = { role: 'model', content: "Đang phân tích dữ liệu kênh để chuẩn bị brainstorm... Vui lòng chờ trong giây lát." };
 
-    setChatHistory([waitingMessage]);
+    setChatHistory([analysisMessage, waitingMessage]);
     setIsBrainstormOpen(true);
 
     handleAiChat([analysisMessage])
@@ -450,7 +450,7 @@ Hãy bắt đầu ngay bây giờ.
         })
         .catch(err => {
             const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
-            setChatHistory([{ role: 'model', content: `Rất tiếc, đã xảy ra lỗi khi phân tích ban đầu: ${errorMessage}` }]);
+            setChatHistory([analysisMessage, { role: 'model', content: `Rất tiếc, đã xảy ra lỗi khi phân tích ban đầu: ${errorMessage}` }]);
         });
   }, [videos, channelDetails, handleAiChat]);
 
@@ -485,7 +485,7 @@ Bắt đầu cuộc trò chuyện bằng cách chào tôi một cách thân thi�
     const contextMessage: ChatMessage = { role: 'user', content: initialPrompt };
     const waitingMessage: ChatMessage = { role: 'model', content: "Đang khởi tạo trợ lý AI... Vui lòng chờ." };
 
-    setChatHistory([waitingMessage]);
+    setChatHistory([contextMessage, waitingMessage]);
     setIsBrainstormOpen(true);
 
     handleAiChat([contextMessage])
@@ -498,7 +498,7 @@ Bắt đầu cuộc trò chuyện bằng cách chào tôi một cách thân thi�
         })
         .catch(err => {
             const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
-            setChatHistory([{ role: 'model', content: `Rất tiếc, đã xảy ra lỗi khi khởi tạo AI: ${errorMessage}` }]);
+            setChatHistory([contextMessage, { role: 'model', content: `Rất tiếc, đã xảy ra lỗi khi khởi tạo AI: ${errorMessage}` }]);
         });
   }, [videos, channelDetails, handleAiChat]);
 
