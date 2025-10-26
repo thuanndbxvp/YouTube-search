@@ -394,16 +394,19 @@ const App: React.FC = () => {
     if (selectedProvider === 'gemini') {
         if (!activeGeminiKey) throw new Error("Vui lòng cung cấp và chọn một API Key của Gemini đang hoạt động trong phần 'Quản lý API'.");
         const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
-         const chat = ai.chats.create({
+        
+        // Convert our app's chat history to the format Gemini's generateContent expects
+        const geminiHistory = history.map(msg => ({
+            role: msg.role,
+            parts: [{ text: msg.content }]
+        }));
+
+        const response = await ai.models.generateContent({
             model: selectedGeminiModel,
-            history: history.slice(0, -1).map(msg => ({
-                role: msg.role,
-                parts: [{ text: msg.content }]
-            }))
+            contents: geminiHistory,
         });
-        const lastMessage = history[history.length - 1];
-        const result = await chat.sendMessage(lastMessage.content);
-        return result.text;
+        
+        return response.text;
     } else { // openai
         if (!activeOpenaiKey) throw new Error("Vui lòng cung cấp và chọn một API Key của OpenAI đang hoạt động trong phần 'Quản lý API'.");
         return generateOpenaiChatResponse(history, activeOpenaiKey, selectedOpenaiModel);
