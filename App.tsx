@@ -1,12 +1,15 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { VideoData, AiProvider, SortKey, SortOrder } from './types';
 import { fetchChannelVideos } from './services/youtubeService';
+import { generateVideoSummary as generateGeminiSummary } from './services/geminiService';
+import { generateVideoSummary as generateOpenaiSummary } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { ErrorMessage } from './components/ErrorMessage';
 import { AppHeader } from './components/AppHeader';
 import { ApiManagementModal } from './components/ApiManagementModal';
+import { ProviderSelector } from './components/ProviderSelector';
 
 const App: React.FC = () => {
   const [channelUrl, setChannelUrl] = useState<string>('');
@@ -60,6 +63,41 @@ const App: React.FC = () => {
       // Reset sort to default when new data is fetched
       setSortKey('publishedAt');
       setSortOrder('desc');
+
+      // Generate summaries in the background
+      const providerApiKey = selectedProvider === 'gemini' ? geminiApiKey : openaiApiKey;
+      if (!providerApiKey) {
+        setError(`Vui lòng nhập API Key cho ${selectedProvider === 'gemini' ? 'Gemini' : 'OpenAI'} trong phần Quản lý API để tạo tóm tắt.`);
+        setVideos(currentVideos => currentVideos.map(v => ({...v, summary: 'Lỗi: Thiếu API key.'})));
+        return;
+      }
+
+      initialVideos.forEach(video => {
+        const generateFunction = selectedProvider === 'gemini' 
+            ? generateGeminiSummary
+            : generateOpenaiSummary;
+        
+        const model = selectedProvider === 'gemini' 
+            ? selectedGeminiModel 
+            : selectedOpenaiModel;
+
+        generateFunction(video.title, providerApiKey, model)
+            .then(summary => {
+                setVideos(currentVideos => 
+                    currentVideos.map(v => 
+                        v.id === video.id ? { ...v, summary } : v
+                    )
+                );
+            })
+            .catch(err => {
+                console.error(`Failed to generate summary for video ${video.id}`, err);
+                setVideos(currentVideos => 
+                    currentVideos.map(v => 
+                        v.id === video.id ? { ...v, summary: `Lỗi tóm tắt: ${err.message}` } : v
+                    )
+                );
+            });
+      });
       
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Đã xảy ra lỗi không xác định.';
@@ -68,7 +106,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [channelUrl, youtubeApiKey]);
+  }, [channelUrl, youtubeApiKey, selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
 
   const handleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -113,6 +151,12 @@ const App: React.FC = () => {
           onAnalyze={handleAnalyze}
           isLoading={isLoading}
         />
+        <div className="max-w-2xl mx-auto mt-4">
+            <ProviderSelector 
+                selectedProvider={selectedProvider} 
+                setSelectedProvider={setSelectedProvider} 
+            />
+        </div>
         
         {error && <ErrorMessage message={error} />}
 

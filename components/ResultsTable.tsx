@@ -72,31 +72,45 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onSort, sort
             <SortableHeader title="Lượt xem" sortKeyName="views" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <SortableHeader title="Lượt thích" sortKeyName="likes" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Thời lượng</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-1/3">Tóm Tắt AI</th>
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Hành động</th>
           </tr>
         </thead>
         <tbody className="bg-gray-800 divide-y divide-gray-700">
           {videos.map((video, index) => (
             <tr key={video.id} className="hover:bg-gray-700/30">
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{index + 1}</td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 align-top">{index + 1}</td>
+              <td className="px-6 py-4 whitespace-nowrap align-top">
                 <div className="text-sm font-medium text-white">{video.title}</div>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-6 py-4 whitespace-nowrap align-top">
                 <div className="text-sm text-gray-300">{formatDate(video.publishedAt)}</div>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-6 py-4 whitespace-nowrap align-top">
                  <span className="flex items-center text-sm text-gray-300"><ViewIcon /> {formatNumber(video.views)}</span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-6 py-4 whitespace-nowrap align-top">
                   <span className="flex items-center text-sm text-gray-300"><LikeIcon /> {formatNumber(video.likes)}</span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-6 py-4 whitespace-nowrap align-top">
                 <div className="flex items-center text-sm text-gray-300">
                     <DurationIcon /> {video.duration}
                 </div>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <td className="px-6 py-4 text-sm text-gray-400 align-top">
+                  {video.summary === 'Đang chờ tóm tắt...' ? (
+                      <div className="flex items-center text-gray-500">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Đang tạo...</span>
+                      </div>
+                  ) : (
+                      <p className="whitespace-pre-wrap break-words">{video.summary}</p>
+                  )}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium align-top">
                 <a
                   href={`https://www.youtube.com/watch?v=${video.id}`}
                   target="_blank"
