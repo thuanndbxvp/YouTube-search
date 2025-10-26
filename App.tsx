@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData, ChannelDetails, Session, ApiKey } from './types';
+import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, HashtagData, ChannelDetails, Session, ApiKey } from './types';
 import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails, getChannelDetails } from './services/youtubeService';
-import { generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
 import { LoadingSpinner } from './components/LoadingSpinner';
@@ -10,11 +9,9 @@ import { AppHeader } from './components/AppHeader';
 import { ApiManagementModal } from './components/ApiManagementModal';
 import { ProviderSelector } from './components/ProviderSelector';
 import { KeywordAnalysis } from './components/KeywordAnalysis';
-import { BrainstormChat } from './components/BrainstormChat';
 import { HashtagModal } from './components/HashtagModal';
 import { ChannelInfoModal } from './components/ChannelInfoModal';
 import { LibraryModal } from './components/LibraryModal';
-import { GoogleGenAI } from '@google/genai';
 
 const App: React.FC = () => {
   const [channelUrl, setChannelUrl] = useState<string>('');
@@ -41,19 +38,15 @@ const App: React.FC = () => {
   const [uploadsPlaylistId, setUploadsPlaylistId] = useState<string | null>(null);
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
   const [isMoreLoading, setIsMoreLoading] = useState<boolean>(false);
-  const [isBrainstormOpen, setIsBrainstormOpen] = useState<boolean>(false);
   const [isHashtagModalOpen, setIsHashtagModalOpen] = useState<boolean>(false);
   const [channelDetails, setChannelDetails] = useState<ChannelDetails | null>(null);
   const [isChannelInfoModalOpen, setIsChannelInfoModalOpen] = useState<boolean>(false);
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   
   // Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [savedSessions, setSavedSessions] = useState<Session[]>([]);
 
   const activeYoutubeKey = useMemo(() => youtubeApiKeys.find(k => k.id === activeYoutubeKeyId)?.key ?? null, [youtubeApiKeys, activeYoutubeKeyId]);
-  const activeGeminiKey = useMemo(() => geminiApiKeys.find(k => k.id === activeGeminiKeyId)?.key ?? null, [geminiApiKeys, activeGeminiKeyId]);
-  const activeOpenaiKey = useMemo(() => openaiApiKeys.find(k => k.id === activeOpenaiKeyId)?.key ?? null, [openaiApiKeys, activeOpenaiKeyId]);
 
   // Load API settings & sessions from localStorage on initial render
   useEffect(() => {
@@ -188,7 +181,6 @@ const App: React.FC = () => {
     setNextPageToken(undefined);
     setUploadsPlaylistId(null);
     setChannelDetails(null);
-    setChatHistory([]);
 
     try {
       const channelId = await getChannelIdFromUrl(channelUrl, activeYoutubeKey);
@@ -235,7 +227,6 @@ const App: React.FC = () => {
             channelUrl,
             videos,
             channelDetails,
-            chatHistory
         }
     };
 
@@ -243,7 +234,7 @@ const App: React.FC = () => {
     setSavedSessions(updatedSessions);
     localStorage.setItem('youtube-analyzer-sessions', JSON.stringify(updatedSessions));
     alert(`Phiên "${sessionName}" đã được lưu!`);
-  }, [channelUrl, videos, channelDetails, chatHistory, savedSessions]);
+  }, [channelUrl, videos, channelDetails, savedSessions]);
     
   const handleLoadSession = useCallback((sessionId: number) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
@@ -252,7 +243,6 @@ const App: React.FC = () => {
         setChannelUrl(data.channelUrl);
         setVideos(data.videos);
         setChannelDetails(data.channelDetails);
-        setChatHistory(data.chatHistory);
         
         setError(null);
         setIsLoading(false);
@@ -390,100 +380,6 @@ const App: React.FC = () => {
         .sort((a, b) => b.count - a.count);
   }, [videos]);
   
-  const handleAiChat = useCallback(async (history: ChatMessage[]) => {
-    if (selectedProvider === 'gemini') {
-        if (!activeGeminiKey) throw new Error("Vui lòng cung cấp và chọn một API Key của Gemini đang hoạt động trong phần 'Quản lý API'.");
-        const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
-        
-        // Convert our app's chat history to the format Gemini's generateContent expects
-        const geminiHistory = history.map(msg => ({
-            role: msg.role,
-            parts: [{ text: msg.content }]
-        }));
-
-        const response = await ai.models.generateContent({
-            model: selectedGeminiModel,
-            contents: geminiHistory,
-        });
-        
-        return response.text;
-    } else { // openai
-        if (!activeOpenaiKey) throw new Error("Vui lòng cung cấp và chọn một API Key của OpenAI đang hoạt động trong phần 'Quản lý API'.");
-        return generateOpenaiChatResponse(history, activeOpenaiKey, selectedOpenaiModel);
-    }
-  }, [selectedProvider, activeGeminiKey, activeOpenaiKey, selectedGeminiModel, selectedOpenaiModel]);
-
-  const generateComprehensivePrompt = useCallback((
-    videos: VideoData[], 
-    keywords: KeywordData[], 
-    hashtags: HashtagData[], 
-    channelDetails: ChannelDetails | null
-  ): string => {
-      const allVideosSortedByViews = [...videos].sort((a, b) => b.views - a.views);
-      
-      let prompt = `Bạn là một nhà chiến lược sáng tạo nội dung YouTube. Tôi đã phân tích một kênh và có các dữ liệu sau:\n\n`;
-  
-      if (channelDetails) {
-          prompt += `--- THÔNG TIN KÊNH ---\n`;
-          prompt += `Tên kênh: ${channelDetails.title}\n`;
-          prompt += `Mô tả: ${channelDetails.description.substring(0, 300)}...\n\n`;
-      }
-  
-      prompt += `--- DANH SÁCH VIDEO ĐÃ PHÂN TÍCH (SẮP XẾP THEO LƯỢT XEM) ---\n`;
-      allVideosSortedByViews.forEach((v, i) => {
-          prompt += `${i + 1}. Tiêu đề: "${v.title}" (Lượt xem: ${v.views.toLocaleString('vi-VN')}, Lượt thích: ${v.likes.toLocaleString('vi-VN')})\n`;
-      });
-      prompt += `\n`;
-  
-      if (keywords.length > 0) {
-          prompt += `--- CÁC TỪ KHÓA CHÍNH TRONG TIÊU ĐỀ ---\n`;
-          prompt += `${keywords.map(k => k.text).join(', ')}\n\n`;
-      }
-  
-      if (hashtags.length > 0) {
-          prompt += `--- CÁC HASHTAG PHỔ BIẾN ---\n`;
-          prompt += `${hashtags.slice(0, 10).map(h => h.text).join(' ')}\n\n`;
-      }
-  
-      prompt += `--- YÊU CẦU ---\n`;
-      prompt += `Dựa trên toàn bộ dữ liệu trên, hãy giúp tôi brainstorm ý tưởng.\n`;
-      prompt += `Bắt đầu bằng cách đề xuất 3 hướng đi (concept) độc đáo cho một kênh tương tự nhưng có sự khác biệt để nổi bật. Trình bày mỗi concept với một tiêu đề hấp dẫn và một đoạn mô tả ngắn gọn về nội dung và đối tượng khán giả.`;
-  
-      return prompt;
-  }, []);
-
-  const handleBrainstormClick = useCallback(async () => {
-    setIsBrainstormOpen(true);
-
-    if (chatHistory.length === 0 && videos.length > 0) {
-      setChatHistory([{ role: 'model', content: "Đang phân tích dữ liệu kênh để đưa ra ý tưởng..." }]);
-      
-      try {
-        const comprehensivePrompt = generateComprehensivePrompt(videos, keywords, hashtags, channelDetails);
-        const initialHistory: ChatMessage[] = [{ role: 'user', content: comprehensivePrompt }];
-        const response = await handleAiChat(initialHistory);
-        setChatHistory([{ role: 'model', content: response }]);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
-        setChatHistory([{ role: 'model', content: `Xin lỗi, đã có lỗi xảy ra khi tạo ý tưởng ban đầu: ${errorMessage}` }]);
-      }
-    }
-  }, [chatHistory, videos, keywords, hashtags, channelDetails, handleAiChat, generateComprehensivePrompt]);
-  
-  const handleSendToNotebookLM = useCallback(() => {
-    if (videos.length === 0) return;
-
-    const baseUrl = 'https://notebooklm.google.com/addsource';
-    const videoUrls = videos.map(video => 
-      `url=${encodeURIComponent(`https://www.youtube.com/watch?v=${video.id}`)}`
-    );
-
-    const finalUrl = `${baseUrl}?${videoUrls.join('&')}`;
-    
-    window.open(finalUrl, '_blank', 'noopener,noreferrer');
-  }, [videos]);
-
-
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
       <main className="container mx-auto px-4 py-8">
@@ -525,50 +421,27 @@ const App: React.FC = () => {
                   <div className="flex flex-col items-center justify-center text-center">
                     <h3 className="text-lg font-semibold text-white mb-3">Công cụ Phân tích & Sáng tạo</h3>
                     <p className="text-sm text-gray-400 mb-4">Sử dụng các công cụ để hiểu sâu hơn về kênh và tìm kiếm ý tưởng mới.</p>
-                     <div className="w-full space-y-3">
-                        <button
-                            onClick={handleBrainstormClick}
-                            disabled={videos.length === 0}
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center disabled:bg-gray-600 disabled:cursor-not-allowed"
+                     <div className="w-full flex gap-3 mt-4">
+                       <button
+                          onClick={() => setIsChannelInfoModalOpen(true)}
+                          disabled={!channelDetails}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 flex items-center justify-center"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                             </svg>
-                            Brainstorm Ý tưởng
+                            Thống kê
                         </button>
-                        <button
-                            onClick={handleSendToNotebookLM}
-                            disabled={videos.length === 0}
-                            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 flex items-center justify-center disabled:bg-gray-600 disabled:cursor-not-allowed"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
+                         <button
+                            onClick={() => setIsHashtagModalOpen(true)}
+                            disabled={hashtags.length === 0}
+                            className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 flex items-center justify-center"
+                          >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
                             </svg>
-                            Gửi tới NotebookLM
-                        </button>
-                        <div className="flex gap-3">
-                           <button
-                              onClick={() => setIsChannelInfoModalOpen(true)}
-                              disabled={!channelDetails}
-                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 flex items-center justify-center"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                </svg>
-                                Thống kê
-                            </button>
-                             <button
-                                onClick={() => setIsHashtagModalOpen(true)}
-                                disabled={hashtags.length === 0}
-                                className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 flex items-center justify-center"
-                              >
-                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                                </svg>
-                                Thẻ tag
-                              </button>
-                        </div>
+                            Thẻ tag
+                          </button>
                     </div>
                   </div>
               </div>
@@ -624,15 +497,6 @@ const App: React.FC = () => {
       />
       {videos.length > 0 && (
         <>
-          <BrainstormChat
-            isOpen={isBrainstormOpen}
-            onClose={() => setIsBrainstormOpen(false)}
-            chatHistory={chatHistory}
-            setChatHistory={setChatHistory}
-            onSendMessage={handleAiChat}
-            provider={selectedProvider}
-            channelDetails={channelDetails}
-          />
           <HashtagModal
             isOpen={isHashtagModalOpen}
             onClose={() => setIsHashtagModalOpen(false)}
