@@ -34,22 +34,17 @@ export async function generateChatResponse(history: ChatMessage[], apiKey: strin
     try {
         const ai = new GoogleGenAI({ apiKey });
         
-        // Convert our ChatMessage[] to Gemini's Content[]
-        // The last message is the user's prompt, the rest is history
-        const lastMessage = history.pop();
-        if (!lastMessage || lastMessage.role !== 'user') {
-            throw new Error("Invalid chat history format.");
-        }
-
-        const chat = ai.chats.create({
+        // Convert our ChatMessage[] to Gemini's Content[] format for multi-turn conversation
+        const contents: Content[] = history.map(msg => ({
+            role: msg.role,
+            parts: [{ text: msg.content }]
+        }));
+        
+        const response = await ai.models.generateContent({
             model: model,
-            history: history.map(msg => ({
-                role: msg.role,
-                parts: [{ text: msg.content }]
-            })),
+            contents: contents,
         });
 
-        const response = await chat.sendMessage({ message: lastMessage.content });
         return response.text;
 
     } catch (error) {
