@@ -47,6 +47,7 @@ export interface SessionData {
   channelUrl: string;
   videos: VideoData[];
   channelDetails: ChannelDetails | null;
+  chatHistory: ChatMessage[];
 }
 
 export interface Session {
