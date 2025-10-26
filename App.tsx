@@ -402,7 +402,7 @@ const App: React.FC = () => {
             }))
         });
         const lastMessage = history[history.length - 1];
-        const result = await chat.sendMessage({ message: lastMessage.content });
+        const result = await chat.sendMessage(lastMessage.content);
         return result.text;
     } else { // openai
         if (!activeOpenaiKey) throw new Error("Vui lòng cung cấp và chọn một API Key của OpenAI đang hoạt động trong phần 'Quản lý API'.");
