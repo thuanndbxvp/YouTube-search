@@ -57,3 +57,9 @@ export interface Session {
   videoCount: number;
   data: SessionData;
 }
+
+export interface ApiKey {
+  id: string;
+  key: string;
+  status: 'valid' | 'invalid' | 'unchecked';
+}

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData, ChannelDetails, Session } from './types';
+import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData, ChannelDetails, Session, ApiKey } from './types';
 import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails, getChannelDetails } from './services/youtubeService';
 import { generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
@@ -26,9 +26,13 @@ const App: React.FC = () => {
 
   // State for API Management
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
-  const [openaiApiKey, setOpenaiApiKey] = useState<string>('');
-  const [youtubeApiKey, setYoutubeApiKey] = useState<string>('');
+  const [youtubeApiKeys, setYoutubeApiKeys] = useState<ApiKey[]>([]);
+  const [geminiApiKeys, setGeminiApiKeys] = useState<ApiKey[]>([]);
+  const [openaiApiKeys, setOpenaiApiKeys] = useState<ApiKey[]>([]);
+  const [activeYoutubeKeyId, setActiveYoutubeKeyId] = useState<string | null>(null);
+  const [activeGeminiKeyId, setActiveGeminiKeyId] = useState<string | null>(null);
+  const [activeOpenaiKeyId, setActiveOpenaiKeyId] = useState<string | null>(null);
+
   const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>('gemini-2.5-flash');
   const [selectedOpenaiModel, setSelectedOpenaiModel] = useState<string>('gpt-3.5-turbo');
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>('gemini');
@@ -47,15 +51,74 @@ const App: React.FC = () => {
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [savedSessions, setSavedSessions] = useState<Session[]>([]);
 
+  const activeYoutubeKey = useMemo(() => youtubeApiKeys.find(k => k.id === activeYoutubeKeyId)?.key ?? null, [youtubeApiKeys, activeYoutubeKeyId]);
+  const activeGeminiKey = useMemo(() => geminiApiKeys.find(k => k.id === activeGeminiKeyId)?.key ?? null, [geminiApiKeys, activeGeminiKeyId]);
+  const activeOpenaiKey = useMemo(() => openaiApiKeys.find(k => k.id === activeOpenaiKeyId)?.key ?? null, [openaiApiKeys, activeOpenaiKeyId]);
 
   // Load API settings & sessions from localStorage on initial render
   useEffect(() => {
-    setGeminiApiKey(localStorage.getItem('geminiApiKey') || '');
-    setOpenaiApiKey(localStorage.getItem('openaiApiKey') || '');
-    setYoutubeApiKey(localStorage.getItem('youtubeApiKey') || '');
     setSelectedGeminiModel(localStorage.getItem('selectedGeminiModel') || 'gemini-2.5-flash');
     setSelectedOpenaiModel(localStorage.getItem('selectedOpenaiModel') || 'gpt-3.5-turbo');
     setSelectedProvider((localStorage.getItem('selectedProvider') as AiProvider) || 'gemini');
+
+    const storedKeysData = localStorage.getItem('youtube-analyzer-api-keys');
+    if (storedKeysData) {
+        const parsedData = JSON.parse(storedKeysData);
+        setYoutubeApiKeys(parsedData.youtube?.keys || []);
+        setActiveYoutubeKeyId(parsedData.youtube?.activeKeyId || null);
+        setGeminiApiKeys(parsedData.gemini?.keys || []);
+        setActiveGeminiKeyId(parsedData.gemini?.activeKeyId || null);
+        setOpenaiApiKeys(parsedData.openai?.keys || []);
+        setActiveOpenaiKeyId(parsedData.openai?.activeKeyId || null);
+    } else {
+        // Migration from old localStorage format
+        const oldYoutubeKey = localStorage.getItem('youtubeApiKey');
+        const oldGeminiKey = localStorage.getItem('geminiApiKey');
+        const oldOpenaiKey = localStorage.getItem('openaiApiKey');
+        
+        let migrated = false;
+        const newKeysData: {
+            youtube: { keys: ApiKey[], activeKeyId: string | null },
+            gemini: { keys: ApiKey[], activeKeyId: string | null },
+            openai: { keys: ApiKey[], activeKeyId: string | null },
+        } = {
+            youtube: { keys: [], activeKeyId: null },
+            gemini: { keys: [], activeKeyId: null },
+            openai: { keys: [], activeKeyId: null },
+        };
+
+        if (oldYoutubeKey) {
+            const newKey = { id: `migrated-${Date.now()}-yt`, key: oldYoutubeKey, status: 'unchecked' as const };
+            newKeysData.youtube.keys.push(newKey);
+            newKeysData.youtube.activeKeyId = newKey.id;
+            setYoutubeApiKeys(newKeysData.youtube.keys);
+            setActiveYoutubeKeyId(newKey.id);
+            localStorage.removeItem('youtubeApiKey');
+            migrated = true;
+        }
+        if (oldGeminiKey) {
+            const newKey = { id: `migrated-${Date.now()}-gm`, key: oldGeminiKey, status: 'unchecked' as const };
+            newKeysData.gemini.keys.push(newKey);
+            newKeysData.gemini.activeKeyId = newKey.id;
+            setGeminiApiKeys(newKeysData.gemini.keys);
+            setActiveGeminiKeyId(newKey.id);
+            localStorage.removeItem('geminiApiKey');
+            migrated = true;
+        }
+        if (oldOpenaiKey) {
+            const newKey = { id: `migrated-${Date.now()}-op`, key: oldOpenaiKey, status: 'unchecked' as const };
+            newKeysData.openai.keys.push(newKey);
+            newKeysData.openai.activeKeyId = newKey.id;
+            setOpenaiApiKeys(newKeysData.openai.keys);
+            setActiveOpenaiKeyId(newKey.id);
+            localStorage.removeItem('openaiApiKey');
+            migrated = true;
+        }
+
+        if (migrated) {
+            localStorage.setItem('youtube-analyzer-api-keys', JSON.stringify(newKeysData));
+        }
+    }
 
     const storedSessions = localStorage.getItem('youtube-analyzer-sessions');
     if (storedSessions) {
@@ -64,38 +127,34 @@ const App: React.FC = () => {
   }, []);
   
   const loadVideos = useCallback(async (playlistId: string, pageToken?: string) => {
+    if (!activeYoutubeKey) {
+      setError('Vui lòng cung cấp và chọn một YouTube API Key đang hoạt động.');
+      return;
+    }
     try {
       let combinedNewVideos: VideoData[] = [];
       let currentToken = pageToken;
       let newNextPageToken: string | undefined = undefined;
       const isInitialLoad = !pageToken;
 
-      // Keep fetching pages as long as the last page was full of invalid videos
       while (true) {
-        const pageData = await getPaginatedVideoIds(playlistId, youtubeApiKey, currentToken);
+        const pageData = await getPaginatedVideoIds(playlistId, activeYoutubeKey, currentToken);
         newNextPageToken = pageData.nextPageToken;
         
         if (pageData.videoIds.length === 0) {
-          // No more videos in the playlist, stop.
           setNextPageToken(undefined);
           break;
         }
 
-        const newVideosFromPage = await getVideoDetails(pageData.videoIds, youtubeApiKey);
+        const newVideosFromPage = await getVideoDetails(pageData.videoIds, activeYoutubeKey);
         if (newVideosFromPage.length > 0) {
           combinedNewVideos.push(...newVideosFromPage);
         }
         
-        // Stop fetching if:
-        // 1. We found some valid videos on this page.
-        // 2. There are no more pages to fetch.
         if (newVideosFromPage.length > 0 || !newNextPageToken) {
           setNextPageToken(newNextPageToken);
           break;
         }
-
-        // If we're here, this page had 0 valid videos, but there is a next page.
-        // Loop again with the new token.
         currentToken = newNextPageToken;
       }
 
@@ -110,7 +169,7 @@ const App: React.FC = () => {
        setError(`Không thể tải video: ${errorMessage}`);
        console.error(e);
     }
-  }, [youtubeApiKey]);
+  }, [activeYoutubeKey]);
 
 
   const handleAnalyze = useCallback(async () => {
@@ -118,8 +177,8 @@ const App: React.FC = () => {
       setError('Vui lòng nhập URL của kênh YouTube.');
       return;
     }
-    if (!youtubeApiKey) {
-      setError('Vui lòng nhập API Key của YouTube. Nhấp vào nút "Quản lý API" ở góc trên.');
+    if (!activeYoutubeKey) {
+      setError('Vui lòng nhập API Key của YouTube, xác thực và chọn nó. Nhấp vào nút "Quản lý API" ở góc trên.');
       return;
     }
     
@@ -129,20 +188,19 @@ const App: React.FC = () => {
     setNextPageToken(undefined);
     setUploadsPlaylistId(null);
     setChannelDetails(null);
-    setChatHistory([]); // Reset brainstorm chat on new analysis
+    setChatHistory([]);
 
     try {
-      const channelId = await getChannelIdFromUrl(channelUrl, youtubeApiKey);
+      const channelId = await getChannelIdFromUrl(channelUrl, activeYoutubeKey);
       
       const [playlistId, details] = await Promise.all([
-          getUploadsPlaylistId(channelId, youtubeApiKey),
-          getChannelDetails(channelId, youtubeApiKey)
+          getUploadsPlaylistId(channelId, activeYoutubeKey),
+          getChannelDetails(channelId, activeYoutubeKey)
       ]);
 
       setUploadsPlaylistId(playlistId);
       setChannelDetails(details);
       await loadVideos(playlistId);
-       // Reset sort to default when new data is fetched
       setSortKey('publishedAt');
       setSortOrder('desc');
 
@@ -153,7 +211,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [channelUrl, youtubeApiKey, loadVideos]);
+  }, [channelUrl, activeYoutubeKey, loadVideos]);
   
   const handleLoadMore = useCallback(async () => {
       if (!uploadsPlaylistId || !nextPageToken) return;
@@ -163,7 +221,6 @@ const App: React.FC = () => {
       setIsMoreLoading(false);
   }, [uploadsPlaylistId, nextPageToken, loadVideos]);
 
-  // Library functions
   const handleSaveSession = useCallback(() => {
     const sessionName = prompt("Nhập tên cho phiên làm việc này:", channelDetails?.title || "Phiên chưa có tên");
     if (!sessionName) return;
@@ -221,16 +278,16 @@ const App: React.FC = () => {
         setSortOrder(prevOrder => prevOrder === 'asc' ? 'desc' : 'asc');
     } else {
         setSortKey(key);
-        setSortOrder('desc'); // Luôn bắt đầu bằng sắp xếp giảm dần cho cột mới
+        setSortOrder('desc');
     }
   }, [sortKey]);
 
   const durationToSeconds = (durationStr: string): number => {
     const parts = durationStr.split(':').map(Number);
     let seconds = 0;
-    if (parts.length === 3) { // HH:MM:SS
+    if (parts.length === 3) {
         seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-    } else if (parts.length === 2) { // MM:SS
+    } else if (parts.length === 2) {
         seconds = parts[0] * 60 + parts[1];
     }
     return seconds;
@@ -335,8 +392,8 @@ const App: React.FC = () => {
   
   const handleAiChat = useCallback(async (history: ChatMessage[]) => {
     if (selectedProvider === 'gemini') {
-        if (!geminiApiKey) throw new Error("Vui lòng cung cấp API Key của Gemini trong phần 'Quản lý API'.");
-        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        if (!activeGeminiKey) throw new Error("Vui lòng cung cấp và chọn một API Key của Gemini đang hoạt động trong phần 'Quản lý API'.");
+        const ai = new GoogleGenAI({ apiKey: activeGeminiKey });
          const chat = ai.chats.create({
             model: selectedGeminiModel,
             history: history.slice(0, -1).map(msg => ({
@@ -348,10 +405,10 @@ const App: React.FC = () => {
         const result = await chat.sendMessage({ message: lastMessage.content });
         return result.text;
     } else { // openai
-        if (!openaiApiKey) throw new Error("Vui lòng cung cấp API Key của OpenAI trong phần 'Quản lý API'.");
-        return generateOpenaiChatResponse(history, openaiApiKey, selectedOpenaiModel);
+        if (!activeOpenaiKey) throw new Error("Vui lòng cung cấp và chọn một API Key của OpenAI đang hoạt động trong phần 'Quản lý API'.");
+        return generateOpenaiChatResponse(history, activeOpenaiKey, selectedOpenaiModel);
     }
-  }, [selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
+  }, [selectedProvider, activeGeminiKey, activeOpenaiKey, selectedGeminiModel, selectedOpenaiModel]);
 
   const generateComprehensivePrompt = useCallback((
     videos: VideoData[], 
@@ -395,7 +452,6 @@ const App: React.FC = () => {
   const handleBrainstormClick = useCallback(async () => {
     setIsBrainstormOpen(true);
 
-    // If chat is empty and we have data, start the initial brainstorm session
     if (chatHistory.length === 0 && videos.length > 0) {
       setChatHistory([{ role: 'model', content: "Đang phân tích dữ liệu kênh để đưa ra ý tưởng..." }]);
       
@@ -403,7 +459,6 @@ const App: React.FC = () => {
         const comprehensivePrompt = generateComprehensivePrompt(videos, keywords, hashtags, channelDetails);
         const initialHistory: ChatMessage[] = [{ role: 'user', content: comprehensivePrompt }];
         const response = await handleAiChat(initialHistory);
-        // The user prompt is part of the context, so we don't show it. We start with the AI's response.
         setChatHistory([{ role: 'model', content: response }]);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
@@ -516,12 +571,18 @@ const App: React.FC = () => {
       <ApiManagementModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        geminiApiKey={geminiApiKey}
-        setGeminiApiKey={setGeminiApiKey}
-        openaiApiKey={openaiApiKey}
-        setOpenaiApiKey={setOpenaiApiKey}
-        youtubeApiKey={youtubeApiKey}
-        setYoutubeApiKey={setYoutubeApiKey}
+        youtubeApiKeys={youtubeApiKeys}
+        setYoutubeApiKeys={setYoutubeApiKeys}
+        activeYoutubeKeyId={activeYoutubeKeyId}
+        setActiveYoutubeKeyId={setActiveYoutubeKeyId}
+        geminiApiKeys={geminiApiKeys}
+        setGeminiApiKeys={setGeminiApiKeys}
+        activeGeminiKeyId={activeGeminiKeyId}
+        setActiveGeminiKeyId={setActiveGeminiKeyId}
+        openaiApiKeys={openaiApiKeys}
+        setOpenaiApiKeys={setOpenaiApiKeys}
+        activeOpenaiKeyId={activeOpenaiKeyId}
+        setActiveOpenaiKeyId={setActiveOpenaiKeyId}
         selectedGeminiModel={selectedGeminiModel}
         setSelectedGeminiModel={setSelectedGeminiModel}
         selectedOpenaiModel={selectedOpenaiModel}
