@@ -50,18 +50,45 @@ const App: React.FC = () => {
   
   const loadVideos = useCallback(async (playlistId: string, pageToken?: string) => {
     try {
-      const { videoIds, nextPageToken: newNextPageToken } = await getPaginatedVideoIds(playlistId, youtubeApiKey, pageToken);
-      if (videoIds.length === 0) {
-        if (!pageToken) {
-          setError('Không tìm thấy video nào trên kênh này.');
+      let combinedNewVideos: VideoData[] = [];
+      let currentToken = pageToken;
+      let newNextPageToken: string | undefined = undefined;
+      const isInitialLoad = !pageToken;
+
+      // Keep fetching pages as long as the last page was full of invalid videos
+      while (true) {
+        const pageData = await getPaginatedVideoIds(playlistId, youtubeApiKey, currentToken);
+        newNextPageToken = pageData.nextPageToken;
+        
+        if (pageData.videoIds.length === 0) {
+          // No more videos in the playlist, stop.
+          setNextPageToken(undefined);
+          break;
         }
-        setNextPageToken(undefined);
-        return;
+
+        const newVideosFromPage = await getVideoDetails(pageData.videoIds, youtubeApiKey);
+        if (newVideosFromPage.length > 0) {
+          combinedNewVideos.push(...newVideosFromPage);
+        }
+        
+        // Stop fetching if:
+        // 1. We found some valid videos on this page.
+        // 2. There are no more pages to fetch.
+        if (newVideosFromPage.length > 0 || !newNextPageToken) {
+          setNextPageToken(newNextPageToken);
+          break;
+        }
+
+        // If we're here, this page had 0 valid videos, but there is a next page.
+        // Loop again with the new token.
+        currentToken = newNextPageToken;
       }
-      const newVideos = await getVideoDetails(videoIds, youtubeApiKey);
-      
-      setVideos(currentVideos => pageToken ? [...currentVideos, ...newVideos] : newVideos);
-      setNextPageToken(newNextPageToken);
+
+      if (combinedNewVideos.length > 0) {
+        setVideos(currentVideos => isInitialLoad ? combinedNewVideos : [...currentVideos, ...combinedNewVideos]);
+      } else if (isInitialLoad) { 
+        setError('Không tìm thấy video nào trên kênh này hoặc tất cả video đều ở chế độ riêng tư/đã bị xóa.');
+      }
 
     } catch (e) {
        const errorMessage = e instanceof Error ? e.message : 'Đã xảy ra lỗi không xác định.';
@@ -233,6 +260,7 @@ const App: React.FC = () => {
 
   const handleAiChat = useCallback(async (history: ChatMessage[]) => {
     if (selectedProvider === 'gemini') {
+        if (!geminiApiKey) throw new Error("Vui lòng cung cấp API Key của Gemini trong phần 'Quản lý API'.");
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
          const chat = ai.chats.create({
             model: selectedGeminiModel,
@@ -245,6 +273,7 @@ const App: React.FC = () => {
         const result = await chat.sendMessage({ message: lastMessage.content });
         return result.text;
     } else { // openai
+        if (!openaiApiKey) throw new Error("Vui lòng cung cấp API Key của OpenAI trong phần 'Quản lý API'.");
         return generateOpenaiChatResponse(history, openaiApiKey, selectedOpenaiModel);
     }
   }, [selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);

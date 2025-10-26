@@ -49,11 +49,19 @@ Bắt đầu bằng cách đề xuất 3 hướng đi (concept) độc đáo cho
         .finally(() => setIsLoading(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, keywords]);
+  }, [isOpen, keywords, onSendMessage]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+  
+  // Reset state when modal is closed to ensure it's fresh for the next session
+  useEffect(() => {
+    if (!isOpen) {
+        setMessages([]);
+        setInput('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
