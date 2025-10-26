@@ -263,10 +263,10 @@ export const ApiManagementModal: React.FC<ApiManagementModalProps> = ({
              <div>
                 <label htmlFor="openai-model" className="block text-sm font-medium text-gray-300 mb-1">Model</label>
                 <select id="openai-model" value={selectedOpenaiModel} onChange={e => setSelectedOpenaiModel(e.target.value)} className="w-full bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Nhanh, Rẻ)</option>
-                    <option value="gpt-4">GPT-4</option>
-                    <option value="gpt-4-turbo">GPT-4 Turbo (Khuyến nghị)</option>
-                    <option value="gpt-4o">GPT-4o (Mới nhất)</option>
+                    <option value="gpt-4o">GPT-4o (Mới nhất &amp; Khuyến nghị)</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini (Nhanh &amp; Hiệu quả)</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Rẻ nhất)</option>
                 </select>
             </div>
         </div>

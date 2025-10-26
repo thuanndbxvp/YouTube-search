@@ -34,7 +34,7 @@ const App: React.FC = () => {
   const [activeOpenaiKeyId, setActiveOpenaiKeyId] = useState<string | null>(null);
 
   const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>('gemini-2.5-flash');
-  const [selectedOpenaiModel, setSelectedOpenaiModel] = useState<string>('gpt-3.5-turbo');
+  const [selectedOpenaiModel, setSelectedOpenaiModel] = useState<string>('gpt-4o');
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>('gemini');
 
   // New state for advanced features
@@ -58,7 +58,7 @@ const App: React.FC = () => {
   // Load API settings & sessions from localStorage on initial render
   useEffect(() => {
     setSelectedGeminiModel(localStorage.getItem('selectedGeminiModel') || 'gemini-2.5-flash');
-    setSelectedOpenaiModel(localStorage.getItem('selectedOpenaiModel') || 'gpt-3.5-turbo');
+    setSelectedOpenaiModel(localStorage.getItem('selectedOpenaiModel') || 'gpt-4o');
     setSelectedProvider((localStorage.getItem('selectedProvider') as AiProvider) || 'gemini');
 
     const storedKeysData = localStorage.getItem('youtube-analyzer-api-keys');
