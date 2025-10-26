@@ -28,3 +28,16 @@ export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
 }
+
+export interface ChannelDetails {
+  id: string;
+  title: string;
+  description: string;
+  publishedAt: string;
+  customUrl: string;
+  country: string | undefined;
+  subscriberCount: number;
+  videoCount: number;
+  viewCount: number;
+  thumbnailUrl: string;
+}

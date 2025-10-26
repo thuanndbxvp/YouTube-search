@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData } from './types';
-import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails } from './services/youtubeService';
+import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData, ChannelDetails } from './types';
+import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails, getChannelDetails } from './services/youtubeService';
 import { generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
@@ -12,6 +12,7 @@ import { ProviderSelector } from './components/ProviderSelector';
 import { KeywordAnalysis } from './components/KeywordAnalysis';
 import { BrainstormChat } from './components/BrainstormChat';
 import { HashtagModal } from './components/HashtagModal';
+import { ChannelInfoModal } from './components/ChannelInfoModal';
 import { GoogleGenAI } from '@google/genai';
 
 const App: React.FC = () => {
@@ -37,6 +38,9 @@ const App: React.FC = () => {
   const [isMoreLoading, setIsMoreLoading] = useState<boolean>(false);
   const [isBrainstormOpen, setIsBrainstormOpen] = useState<boolean>(false);
   const [isHashtagModalOpen, setIsHashtagModalOpen] = useState<boolean>(false);
+  const [channelDetails, setChannelDetails] = useState<ChannelDetails | null>(null);
+  const [isChannelInfoModalOpen, setIsChannelInfoModalOpen] = useState<boolean>(false);
+
 
   // Load API settings from localStorage on initial render
   useEffect(() => {
@@ -113,11 +117,18 @@ const App: React.FC = () => {
     setVideos([]);
     setNextPageToken(undefined);
     setUploadsPlaylistId(null);
+    setChannelDetails(null);
 
     try {
       const channelId = await getChannelIdFromUrl(channelUrl, youtubeApiKey);
-      const playlistId = await getUploadsPlaylistId(channelId, youtubeApiKey);
+      
+      const [playlistId, details] = await Promise.all([
+          getUploadsPlaylistId(channelId, youtubeApiKey),
+          getChannelDetails(channelId, youtubeApiKey)
+      ]);
+
       setUploadsPlaylistId(playlistId);
+      setChannelDetails(details);
       await loadVideos(playlistId);
        // Reset sort to default when new data is fetched
       setSortKey('publishedAt');
@@ -317,6 +328,16 @@ const App: React.FC = () => {
                     <p className="text-sm text-gray-400 mb-4">Sử dụng các công cụ để hiểu sâu hơn về kênh và tìm kiếm ý tưởng mới.</p>
                      <div className="w-full space-y-3">
                         <button
+                          onClick={() => setIsChannelInfoModalOpen(true)}
+                          disabled={!channelDetails}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 flex items-center justify-center"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                            Thống kê Kênh
+                        </button>
+                        <button
                             onClick={() => setIsBrainstormOpen(true)}
                             className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
                         >
@@ -391,6 +412,13 @@ const App: React.FC = () => {
             hashtags={hashtags}
           />
         </>
+      )}
+      {channelDetails && (
+        <ChannelInfoModal
+            isOpen={isChannelInfoModalOpen}
+            onClose={() => setIsChannelInfoModalOpen(false)}
+            channelDetails={channelDetails}
+        />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import type { VideoData } from '../types';
+import type { VideoData, ChannelDetails } from '../types';
 
 const API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
@@ -17,12 +17,12 @@ export async function getChannelIdFromUrl(url: string, apiKey: string): Promise<
         const handle = pathParts[0] === 'c' 
             ? pathParts[1] 
             : pathParts[0]?.startsWith('@') 
-            ? pathParts[0].substring(1) 
+            ? pathParts[0]
             : null;
 
         if (handle) {
             // Sử dụng search endpoint để tìm ID kênh từ handle
-            const searchUrl = `${API_BASE_URL}/search?part=snippet&q=${encodeURIComponent(handle)}&type=channel&key=${apiKey}`;
+            const searchUrl = `${API_BASE_URL}/search?part=snippet&q=${encodeURIComponent(handle.replace('@', ''))}&type=channel&key=${apiKey}`;
             const response = await fetch(searchUrl);
             const data = await response.json();
             if (data.items && data.items.length > 0) {
@@ -130,4 +130,33 @@ export async function getVideoDetails(videoIds: string[], apiKey: string): Promi
         likes: parseInt(item.statistics.likeCount, 10) || 0,
         duration: parseISO8601Duration(item.contentDetails.duration),
     }));
+}
+
+export async function getChannelDetails(channelId: string, apiKey: string): Promise<ChannelDetails | null> {
+    const url = `${API_BASE_URL}/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.error) {
+        console.error(`Lỗi YouTube API khi lấy chi tiết kênh: ${data.error.message}`);
+        return null;
+    }
+
+    if (!data.items || data.items.length === 0) {
+        return null;
+    }
+    const item = data.items[0];
+
+    return {
+        id: item.id,
+        title: item.snippet.title,
+        description: item.snippet.description,
+        publishedAt: item.snippet.publishedAt,
+        customUrl: item.snippet.customUrl || '',
+        country: item.snippet.country,
+        subscriberCount: parseInt(item.statistics.subscriberCount, 10) || 0,
+        videoCount: parseInt(item.statistics.videoCount, 10) || 0,
+        viewCount: parseInt(item.statistics.viewCount, 10) || 0,
+        thumbnailUrl: item.snippet.thumbnails.default.url,
+    };
 }
