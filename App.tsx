@@ -1,7 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { VideoData, AiProvider } from './types';
-import { generateVideoSummary as generateGeminiSummary } from './services/geminiService';
-import { generateVideoSummary as generateOpenAISummary } from './services/openaiService';
 import { fetchChannelVideos } from './services/youtubeService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
@@ -9,7 +7,6 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { ErrorMessage } from './components/ErrorMessage';
 import { AppHeader } from './components/AppHeader';
 import { ApiManagementModal } from './components/ApiManagementModal';
-import { ProviderSelector } from './components/ProviderSelector';
 
 const App: React.FC = () => {
   const [channelUrl, setChannelUrl] = useState<string>('');
@@ -45,15 +42,7 @@ const App: React.FC = () => {
       setError('Vui lòng nhập API Key của YouTube. Nhấp vào nút "Quản lý API" ở góc trên.');
       return;
     }
-    if (selectedProvider === 'gemini' && !geminiApiKey) {
-      setError('Vui lòng nhập API Key của Gemini. Nhấp vào nút "Quản lý API" ở góc trên.');
-      return;
-    }
-    if (selectedProvider === 'openai' && !openaiApiKey) {
-      setError('Vui lòng nhập API Key của OpenAI. Nhấp vào nút "Quản lý API" ở góc trên.');
-      return;
-    }
-
+    
     setIsLoading(true);
     setError(null);
     setVideos([]);
@@ -67,31 +56,6 @@ const App: React.FC = () => {
       }
       setVideos(initialVideos);
       
-      const summaryGenerator = selectedProvider === 'gemini' 
-        ? (title: string) => generateGeminiSummary(title, geminiApiKey, selectedGeminiModel)
-        : (title: string) => generateOpenAISummary(title, openaiApiKey, selectedOpenaiModel);
-
-      for (const videoToSummarize of initialVideos) {
-        try {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const summary = await summaryGenerator(videoToSummarize.title);
-
-          setVideos(currentVideos =>
-            currentVideos.map(video =>
-              video.id === videoToSummarize.id ? { ...video, summary } : video
-            )
-          );
-        } catch (summaryError) {
-          console.error(`Error summarizing video "${videoToSummarize.title}":`, summaryError);
-          const errorMessage = summaryError instanceof Error ? summaryError.message : 'Lỗi không xác định.';
-          setVideos(currentVideos =>
-            currentVideos.map(video =>
-              video.id === videoToSummarize.id ? { ...video, summary: `Lỗi: ${errorMessage}` } : video
-            )
-          );
-        }
-      }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Đã xảy ra lỗi không xác định.';
       setError(`Không thể phân tích kênh: ${errorMessage}`);
@@ -99,7 +63,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [channelUrl, youtubeApiKey, selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
+  }, [channelUrl, youtubeApiKey]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
@@ -124,10 +88,6 @@ const App: React.FC = () => {
 
           {videos.length > 0 && (
             <>
-              <ProviderSelector
-                selectedProvider={selectedProvider}
-                setSelectedProvider={setSelectedProvider}
-              />
               <ResultsTable videos={videos} />
             </>
           )}

@@ -77,9 +77,30 @@ async function getVideoIds(playlistId: string, apiKey:string): Promise<string[]>
     return data.items.map((item: any) => item.contentDetails.videoId);
 }
 
-// Lấy thông tin chi tiết của video (thống kê, snippet)
+// Chuyển đổi thời lượng ISO 8601 sang định dạng dễ đọc (HH:MM:SS hoặc MM:SS)
+function parseISO8601Duration(duration: string): string {
+    const regex = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+    const matches = duration.match(regex);
+
+    if (!matches) {
+        return '00:00';
+    }
+
+    const hours = parseInt(matches[1] || '0', 10);
+    const minutes = parseInt(matches[2] || '0', 10);
+    const seconds = parseInt(matches[3] || '0', 10);
+
+    const pad = (num: number) => num.toString().padStart(2, '0');
+
+    if (hours > 0) {
+        return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+    return `${pad(minutes)}:${pad(seconds)}`;
+}
+
+// Lấy thông tin chi tiết của video (thống kê, snippet, thời lượng)
 async function getVideoDetails(videoIds: string[], apiKey: string): Promise<VideoData[]> {
-    const url = `${API_BASE_URL}/videos?part=snippet,statistics&id=${videoIds.join(',')}&key=${apiKey}`;
+    const url = `${API_BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${videoIds.join(',')}&key=${apiKey}`;
     const response = await fetch(url);
     const data = await response.json();
 
@@ -92,6 +113,7 @@ async function getVideoDetails(videoIds: string[], apiKey: string): Promise<Vide
         views: parseInt(item.statistics.viewCount, 10) || 0,
         likes: parseInt(item.statistics.likeCount, 10) || 0,
         summary: 'Đang chờ tóm tắt...',
+        duration: parseISO8601Duration(item.contentDetails.duration),
     })).sort((a: VideoData, b: VideoData) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()); // Sắp xếp theo ngày mới nhất
 }
 

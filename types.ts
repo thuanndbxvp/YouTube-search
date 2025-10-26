@@ -6,6 +6,7 @@ export interface VideoData {
   views: number;
   likes: number;
   summary: string;
+  duration: string;
 }
 
 export type AiProvider = 'gemini' | 'openai';
