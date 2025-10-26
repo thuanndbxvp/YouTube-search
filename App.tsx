@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { VideoData, AiProvider } from './types';
 import { generateVideoSummary as generateGeminiSummary } from './services/geminiService';
 import { generateVideoSummary as generateOpenAISummary } from './services/openaiService';
+import { fetchChannelVideos } from './services/youtubeService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
 import { LoadingSpinner } from './components/LoadingSpinner';
@@ -20,6 +21,7 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [openaiApiKey, setOpenaiApiKey] = useState<string>('');
+  const [youtubeApiKey, setYoutubeApiKey] = useState<string>('');
   const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>('gemini-2.5-flash');
   const [selectedOpenaiModel, setSelectedOpenaiModel] = useState<string>('gpt-3.5-turbo');
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>('gemini');
@@ -28,34 +30,19 @@ const App: React.FC = () => {
   useEffect(() => {
     setGeminiApiKey(localStorage.getItem('geminiApiKey') || '');
     setOpenaiApiKey(localStorage.getItem('openaiApiKey') || '');
+    setYoutubeApiKey(localStorage.getItem('youtubeApiKey') || '');
     setSelectedGeminiModel(localStorage.getItem('selectedGeminiModel') || 'gemini-2.5-flash');
     setSelectedOpenaiModel(localStorage.getItem('selectedOpenaiModel') || 'gpt-3.5-turbo');
     setSelectedProvider((localStorage.getItem('selectedProvider') as AiProvider) || 'gemini');
   }, []);
 
-  const generateMockVideoData = (count: number): VideoData[] => {
-    const mockVideos: VideoData[] = [];
-    const baseDate = new Date();
-    for (let i = 0; i < count; i++) {
-      const views = Math.floor(Math.random() * 2000000) + 1000;
-      const likes = Math.floor(views * (Math.random() * 0.05 + 0.02));
-      const date = new Date(baseDate.getTime() - i * (Math.random() * 3 + 1) * 24 * 60 * 60 * 1000);
-      
-      mockVideos.push({
-        id: `mock_id_${i + 1}`,
-        title: `Video Hướng Dẫn Sáng Tạo Nội Dung - Tập ${50 - i}`,
-        publishedAt: date.toISOString(),
-        views,
-        likes,
-        summary: 'Đang chờ tóm tắt...',
-      });
-    }
-    return mockVideos;
-  };
-
   const handleAnalyze = useCallback(async () => {
     if (!channelUrl.trim()) {
       setError('Vui lòng nhập URL của kênh YouTube.');
+      return;
+    }
+    if (!youtubeApiKey) {
+      setError('Vui lòng nhập API Key của YouTube. Nhấp vào nút "Quản lý API" ở góc trên.');
       return;
     }
     if (selectedProvider === 'gemini' && !geminiApiKey) {
@@ -72,7 +59,12 @@ const App: React.FC = () => {
     setVideos([]);
 
     try {
-      const initialVideos = generateMockVideoData(50);
+      const initialVideos = await fetchChannelVideos(channelUrl, youtubeApiKey);
+      if (initialVideos.length === 0) {
+        setError('Không tìm thấy video nào trên kênh này hoặc kênh không tồn tại.');
+        setIsLoading(false);
+        return;
+      }
       setVideos(initialVideos);
       
       const summaryGenerator = selectedProvider === 'gemini' 
@@ -107,7 +99,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [channelUrl, selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
+  }, [channelUrl, youtubeApiKey, selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
@@ -148,6 +140,8 @@ const App: React.FC = () => {
         setGeminiApiKey={setGeminiApiKey}
         openaiApiKey={openaiApiKey}
         setOpenaiApiKey={setOpenaiApiKey}
+        youtubeApiKey={youtubeApiKey}
+        setYoutubeApiKey={setYoutubeApiKey}
         selectedGeminiModel={selectedGeminiModel}
         setSelectedGeminiModel={setSelectedGeminiModel}
         selectedOpenaiModel={selectedOpenaiModel}
