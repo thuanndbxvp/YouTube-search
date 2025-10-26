@@ -24,7 +24,6 @@ export interface HashtagData {
   count: number;
 }
 
-// FIX: Add ChatMessage interface for use in BrainstormChat component.
 export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
@@ -57,10 +56,4 @@ export interface Session {
   channelTitle: string;
   videoCount: number;
   data: SessionData;
-}
-
-export interface ApiKey {
-  id: string;
-  key: string;
-  status: 'valid' | 'invalid' | 'unchecked';
 }

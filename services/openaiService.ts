@@ -42,44 +42,38 @@ export async function generateVideoSummary(title: string, apiKey: string, model:
     }
   }
 
-  export async function generateChatResponse(history: ChatMessage[], apiKey: string, model: string): Promise<string> {
-    if (!apiKey) {
-      throw new Error("API Key của OpenAI không được cung cấp.");
-    }
-    const API_URL = "https://api.openai.com/v1/chat/completions";
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: history, // OpenAI's format matches our ChatMessage interface
-          temperature: 0.7,
-        }),
-      });
-  
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
-      }
+export async function generateChatResponse(history: ChatMessage[], apiKey: string, model: string): Promise<string> {
+  if (!apiKey) {
+    throw new Error("API Key của OpenAI không được cung cấp.");
+  }
 
-      const responseText = data.choices[0]?.message?.content?.trim();
-      if (!responseText) {
-          console.warn("OpenAI response was empty.", data);
-          const finishReason = data.choices[0]?.finish_reason;
-          if (finishReason === 'content_filter') {
-               return "Phản hồi đã bị chặn bởi bộ lọc nội dung của OpenAI. Vui lòng thử một câu hỏi khác.";
-          }
-          return `Không nhận được phản hồi hợp lệ từ OpenAI. Lý do: ${finishReason || "Không rõ"}.`;
-      }
-      return responseText;
+  const API_URL = "https://api.openai.com/v1/chat/completions";
 
-    } catch (error) {
-      console.error("Error generating chat response with OpenAI:", error);
-      const errorMessage = error instanceof Error ? error.message : "Lỗi không xác định";
-      throw new Error(`Lỗi OpenAI API: ${errorMessage}`);
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: history.map(msg => ({ role: msg.role, content: msg.content })),
+        temperature: 0.8,
+        stream: false,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
     }
+
+    return data.choices[0]?.message?.content?.trim() || "Không nhận được phản hồi hợp lệ từ API.";
+  } catch (error) {
+    console.error("Error generating chat response with OpenAI:", error);
+    const errorMessage = error instanceof Error ? error.message : "Lỗi không xác định";
+    throw new Error(`Lỗi OpenAI API: ${errorMessage}`);
+  }
 }

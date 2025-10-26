@@ -1,5 +1,5 @@
 {
-  "name": "YouTube Channel Analyzer",
+  "name": "Copy of YouTube Channel Analyzer",
   "description": "An application to analyze a YouTube channel by providing a comprehensive overview of its recent videos. Users can input a channel URL to get details like publication date, views, likes, and an AI-generated summary for up to 50 videos.",
   "requestFramePermissions": []
 }

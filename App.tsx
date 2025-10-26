@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, HashtagData, ChannelDetails, Session, ApiKey, ChatMessage } from './types';
+import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData, ChannelDetails, Session } from './types';
 import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails, getChannelDetails } from './services/youtubeService';
-import { generateChatResponse as generateGeminiChatResponse } from './services/geminiService';
 import { generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
@@ -11,10 +10,11 @@ import { AppHeader } from './components/AppHeader';
 import { ApiManagementModal } from './components/ApiManagementModal';
 import { ProviderSelector } from './components/ProviderSelector';
 import { KeywordAnalysis } from './components/KeywordAnalysis';
-import { HashtagModal } from './components/HashtagModal';
 import { BrainstormChat } from './components/BrainstormChat';
+import { HashtagModal } from './components/HashtagModal';
 import { ChannelInfoModal } from './components/ChannelInfoModal';
 import { LibraryModal } from './components/LibraryModal';
+import { GoogleGenAI } from '@google/genai';
 
 const App: React.FC = () => {
   const [channelUrl, setChannelUrl] = useState<string>('');
@@ -26,100 +26,36 @@ const App: React.FC = () => {
 
   // State for API Management
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [youtubeApiKeys, setYoutubeApiKeys] = useState<ApiKey[]>([]);
-  const [geminiApiKeys, setGeminiApiKeys] = useState<ApiKey[]>([]);
-  const [openaiApiKeys, setOpenaiApiKeys] = useState<ApiKey[]>([]);
-  const [activeYoutubeKeyId, setActiveYoutubeKeyId] = useState<string | null>(null);
-  const [activeGeminiKeyId, setActiveGeminiKeyId] = useState<string | null>(null);
-  const [activeOpenaiKeyId, setActiveOpenaiKeyId] = useState<string | null>(null);
-
+  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  const [openaiApiKey, setOpenaiApiKey] = useState<string>('');
+  const [youtubeApiKey, setYoutubeApiKey] = useState<string>('');
   const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>('gemini-2.5-flash');
-  const [selectedOpenaiModel, setSelectedOpenaiModel] = useState<string>('gpt-4o');
+  const [selectedOpenaiModel, setSelectedOpenaiModel] = useState<string>('gpt-3.5-turbo');
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>('gemini');
 
   // New state for advanced features
   const [uploadsPlaylistId, setUploadsPlaylistId] = useState<string | null>(null);
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
   const [isMoreLoading, setIsMoreLoading] = useState<boolean>(false);
+  const [isBrainstormOpen, setIsBrainstormOpen] = useState<boolean>(false);
   const [isHashtagModalOpen, setIsHashtagModalOpen] = useState<boolean>(false);
   const [channelDetails, setChannelDetails] = useState<ChannelDetails | null>(null);
   const [isChannelInfoModalOpen, setIsChannelInfoModalOpen] = useState<boolean>(false);
-  
-  // Brainstorm State
-  const [isBrainstormOpen, setIsBrainstormOpen] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [chatTitle, setChatTitle] = useState<string>('');
-
+  
   // Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [savedSessions, setSavedSessions] = useState<Session[]>([]);
 
-  const activeYoutubeKey = useMemo(() => youtubeApiKeys.find(k => k.id === activeYoutubeKeyId)?.key ?? null, [youtubeApiKeys, activeYoutubeKeyId]);
 
   // Load API settings & sessions from localStorage on initial render
   useEffect(() => {
+    setGeminiApiKey(localStorage.getItem('geminiApiKey') || '');
+    setOpenaiApiKey(localStorage.getItem('openaiApiKey') || '');
+    setYoutubeApiKey(localStorage.getItem('youtubeApiKey') || '');
     setSelectedGeminiModel(localStorage.getItem('selectedGeminiModel') || 'gemini-2.5-flash');
-    setSelectedOpenaiModel(localStorage.getItem('selectedOpenaiModel') || 'gpt-4o');
+    setSelectedOpenaiModel(localStorage.getItem('selectedOpenaiModel') || 'gpt-3.5-turbo');
     setSelectedProvider((localStorage.getItem('selectedProvider') as AiProvider) || 'gemini');
-
-    const storedKeysData = localStorage.getItem('youtube-analyzer-api-keys');
-    if (storedKeysData) {
-        const parsedData = JSON.parse(storedKeysData);
-        setYoutubeApiKeys(parsedData.youtube?.keys || []);
-        setActiveYoutubeKeyId(parsedData.youtube?.activeKeyId || null);
-        setGeminiApiKeys(parsedData.gemini?.keys || []);
-        setActiveGeminiKeyId(parsedData.gemini?.activeKeyId || null);
-        setOpenaiApiKeys(parsedData.openai?.keys || []);
-        setActiveOpenaiKeyId(parsedData.openai?.activeKeyId || null);
-    } else {
-        // Migration from old localStorage format
-        const oldYoutubeKey = localStorage.getItem('youtubeApiKey');
-        const oldGeminiKey = localStorage.getItem('geminiApiKey');
-        const oldOpenaiKey = localStorage.getItem('openaiApiKey');
-        
-        let migrated = false;
-        const newKeysData: {
-            youtube: { keys: ApiKey[], activeKeyId: string | null },
-            gemini: { keys: ApiKey[], activeKeyId: string | null },
-            openai: { keys: ApiKey[], activeKeyId: string | null },
-        } = {
-            youtube: { keys: [], activeKeyId: null },
-            gemini: { keys: [], activeKeyId: null },
-            openai: { keys: [], activeKeyId: null },
-        };
-
-        if (oldYoutubeKey) {
-            const newKey = { id: `migrated-${Date.now()}-yt`, key: oldYoutubeKey, status: 'unchecked' as const };
-            newKeysData.youtube.keys.push(newKey);
-            newKeysData.youtube.activeKeyId = newKey.id;
-            setYoutubeApiKeys(newKeysData.youtube.keys);
-            setActiveYoutubeKeyId(newKey.id);
-            localStorage.removeItem('youtubeApiKey');
-            migrated = true;
-        }
-        if (oldGeminiKey) {
-            const newKey = { id: `migrated-${Date.now()}-gm`, key: oldGeminiKey, status: 'unchecked' as const };
-            newKeysData.gemini.keys.push(newKey);
-            newKeysData.gemini.activeKeyId = newKey.id;
-            setGeminiApiKeys(newKeysData.gemini.keys);
-            setActiveGeminiKeyId(newKey.id);
-            localStorage.removeItem('geminiApiKey');
-            migrated = true;
-        }
-        if (oldOpenaiKey) {
-            const newKey = { id: `migrated-${Date.now()}-op`, key: oldOpenaiKey, status: 'unchecked' as const };
-            newKeysData.openai.keys.push(newKey);
-            newKeysData.openai.activeKeyId = newKey.id;
-            setOpenaiApiKeys(newKeysData.openai.keys);
-            setActiveOpenaiKeyId(newKey.id);
-            localStorage.removeItem('openaiApiKey');
-            migrated = true;
-        }
-
-        if (migrated) {
-            localStorage.setItem('youtube-analyzer-api-keys', JSON.stringify(newKeysData));
-        }
-    }
 
     const storedSessions = localStorage.getItem('youtube-analyzer-sessions');
     if (storedSessions) {
@@ -128,34 +64,38 @@ const App: React.FC = () => {
   }, []);
   
   const loadVideos = useCallback(async (playlistId: string, pageToken?: string) => {
-    if (!activeYoutubeKey) {
-      setError('Vui lòng cung cấp và chọn một YouTube API Key đang hoạt động.');
-      return;
-    }
     try {
       let combinedNewVideos: VideoData[] = [];
       let currentToken = pageToken;
       let newNextPageToken: string | undefined = undefined;
       const isInitialLoad = !pageToken;
 
+      // Keep fetching pages as long as the last page was full of invalid videos
       while (true) {
-        const pageData = await getPaginatedVideoIds(playlistId, activeYoutubeKey, currentToken);
+        const pageData = await getPaginatedVideoIds(playlistId, youtubeApiKey, currentToken);
         newNextPageToken = pageData.nextPageToken;
         
         if (pageData.videoIds.length === 0) {
+          // No more videos in the playlist, stop.
           setNextPageToken(undefined);
           break;
         }
 
-        const newVideosFromPage = await getVideoDetails(pageData.videoIds, activeYoutubeKey);
+        const newVideosFromPage = await getVideoDetails(pageData.videoIds, youtubeApiKey);
         if (newVideosFromPage.length > 0) {
           combinedNewVideos.push(...newVideosFromPage);
         }
         
+        // Stop fetching if:
+        // 1. We found some valid videos on this page.
+        // 2. There are no more pages to fetch.
         if (newVideosFromPage.length > 0 || !newNextPageToken) {
           setNextPageToken(newNextPageToken);
           break;
         }
+
+        // If we're here, this page had 0 valid videos, but there is a next page.
+        // Loop again with the new token.
         currentToken = newNextPageToken;
       }
 
@@ -170,7 +110,7 @@ const App: React.FC = () => {
        setError(`Không thể tải video: ${errorMessage}`);
        console.error(e);
     }
-  }, [activeYoutubeKey]);
+  }, [youtubeApiKey]);
 
 
   const handleAnalyze = useCallback(async () => {
@@ -178,30 +118,31 @@ const App: React.FC = () => {
       setError('Vui lòng nhập URL của kênh YouTube.');
       return;
     }
-    if (!activeYoutubeKey) {
-      setError('Vui lòng nhập API Key của YouTube, xác thực và chọn nó. Nhấp vào nút "Quản lý API" ở góc trên.');
+    if (!youtubeApiKey) {
+      setError('Vui lòng nhập API Key của YouTube. Nhấp vào nút "Quản lý API" ở góc trên.');
       return;
     }
     
     setIsLoading(true);
     setError(null);
     setVideos([]);
-    setChatHistory([]);
     setNextPageToken(undefined);
     setUploadsPlaylistId(null);
     setChannelDetails(null);
+    setChatHistory([]); // Reset brainstorm chat on new analysis
 
     try {
-      const channelId = await getChannelIdFromUrl(channelUrl, activeYoutubeKey);
+      const channelId = await getChannelIdFromUrl(channelUrl, youtubeApiKey);
       
       const [playlistId, details] = await Promise.all([
-          getUploadsPlaylistId(channelId, activeYoutubeKey),
-          getChannelDetails(channelId, activeYoutubeKey)
+          getUploadsPlaylistId(channelId, youtubeApiKey),
+          getChannelDetails(channelId, youtubeApiKey)
       ]);
 
       setUploadsPlaylistId(playlistId);
       setChannelDetails(details);
       await loadVideos(playlistId);
+       // Reset sort to default when new data is fetched
       setSortKey('publishedAt');
       setSortOrder('desc');
 
@@ -212,7 +153,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [channelUrl, activeYoutubeKey, loadVideos]);
+  }, [channelUrl, youtubeApiKey, loadVideos]);
   
   const handleLoadMore = useCallback(async () => {
       if (!uploadsPlaylistId || !nextPageToken) return;
@@ -222,6 +163,7 @@ const App: React.FC = () => {
       setIsMoreLoading(false);
   }, [uploadsPlaylistId, nextPageToken, loadVideos]);
 
+  // Library functions
   const handleSaveSession = useCallback(() => {
     const sessionName = prompt("Nhập tên cho phiên làm việc này:", channelDetails?.title || "Phiên chưa có tên");
     if (!sessionName) return;
@@ -236,7 +178,7 @@ const App: React.FC = () => {
             channelUrl,
             videos,
             channelDetails,
-            chatHistory,
+            chatHistory
         }
     };
 
@@ -244,7 +186,7 @@ const App: React.FC = () => {
     setSavedSessions(updatedSessions);
     localStorage.setItem('youtube-analyzer-sessions', JSON.stringify(updatedSessions));
     alert(`Phiên "${sessionName}" đã được lưu!`);
-  }, [channelUrl, videos, channelDetails, savedSessions, chatHistory]);
+  }, [channelUrl, videos, channelDetails, chatHistory, savedSessions]);
     
   const handleLoadSession = useCallback((sessionId: number) => {
     const sessionToLoad = savedSessions.find(s => s.id === sessionId);
@@ -253,7 +195,7 @@ const App: React.FC = () => {
         setChannelUrl(data.channelUrl);
         setVideos(data.videos);
         setChannelDetails(data.channelDetails);
-        setChatHistory(data.chatHistory || []);
+        setChatHistory(data.chatHistory);
         
         setError(null);
         setIsLoading(false);
@@ -279,16 +221,16 @@ const App: React.FC = () => {
         setSortOrder(prevOrder => prevOrder === 'asc' ? 'desc' : 'asc');
     } else {
         setSortKey(key);
-        setSortOrder('desc');
+        setSortOrder('desc'); // Luôn bắt đầu bằng sắp xếp giảm dần cho cột mới
     }
   }, [sortKey]);
 
   const durationToSeconds = (durationStr: string): number => {
     const parts = durationStr.split(':').map(Number);
     let seconds = 0;
-    if (parts.length === 3) {
+    if (parts.length === 3) { // HH:MM:SS
         seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-    } else if (parts.length === 2) {
+    } else if (parts.length === 2) { // MM:SS
         seconds = parts[0] * 60 + parts[1];
     }
     return seconds;
@@ -391,35 +333,84 @@ const App: React.FC = () => {
         .sort((a, b) => b.count - a.count);
   }, [videos]);
   
-  const handleAiChat = useCallback(async (history: ChatMessage[]): Promise<string> => {
+  const handleAiChat = useCallback(async (history: ChatMessage[]) => {
     if (selectedProvider === 'gemini') {
-        const activeKey = geminiApiKeys.find(k => k.id === activeGeminiKeyId)?.key;
-        if (!activeKey) throw new Error("Vui lòng chọn một Gemini API Key đang hoạt động.");
-        return await generateGeminiChatResponse(history, activeKey, selectedGeminiModel);
+        if (!geminiApiKey) throw new Error("Vui lòng cung cấp API Key của Gemini trong phần 'Quản lý API'.");
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+         const chat = ai.chats.create({
+            model: selectedGeminiModel,
+            history: history.slice(0, -1).map(msg => ({
+                role: msg.role,
+                parts: [{ text: msg.content }]
+            }))
+        });
+        const lastMessage = history[history.length - 1];
+        const result = await chat.sendMessage({ message: lastMessage.content });
+        return result.text;
     } else { // openai
-        const activeKey = openaiApiKeys.find(k => k.id === activeOpenaiKeyId)?.key;
-        if (!activeKey) throw new Error("Vui lòng chọn một OpenAI API Key đang hoạt động.");
-        return await generateOpenaiChatResponse(history, activeKey, selectedOpenaiModel);
+        if (!openaiApiKey) throw new Error("Vui lòng cung cấp API Key của OpenAI trong phần 'Quản lý API'.");
+        return generateOpenaiChatResponse(history, openaiApiKey, selectedOpenaiModel);
     }
-  }, [selectedProvider, geminiApiKeys, activeGeminiKeyId, selectedGeminiModel, openaiApiKeys, activeOpenaiKeyId, selectedOpenaiModel]);
+  }, [selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
+
+  const generateComprehensivePrompt = useCallback((
+    videos: VideoData[], 
+    keywords: KeywordData[], 
+    hashtags: HashtagData[], 
+    channelDetails: ChannelDetails | null
+  ): string => {
+      const allVideosSortedByViews = [...videos].sort((a, b) => b.views - a.views);
+      
+      let prompt = `Bạn là một nhà chiến lược sáng tạo nội dung YouTube. Tôi đã phân tích một kênh và có các dữ liệu sau:\n\n`;
   
-  const handleBrainstormClick = useCallback(() => {
-    setChatTitle('Brainstorm Ý tưởng');
-    setChatHistory([{
-      role: 'model',
-      content: 'Xin chào! Hãy bắt đầu brainstorm ý tưởng cho kênh YouTube của bạn. Bạn muốn bắt đầu từ đâu?'
-    }]);
-    setIsBrainstormOpen(true);
+      if (channelDetails) {
+          prompt += `--- THÔNG TIN KÊNH ---\n`;
+          prompt += `Tên kênh: ${channelDetails.title}\n`;
+          prompt += `Mô tả: ${channelDetails.description.substring(0, 300)}...\n\n`;
+      }
+  
+      prompt += `--- DANH SÁCH VIDEO ĐÃ PHÂN TÍCH (SẮP XẾP THEO LƯỢT XEM) ---\n`;
+      allVideosSortedByViews.forEach((v, i) => {
+          prompt += `${i + 1}. Tiêu đề: "${v.title}" (Lượt xem: ${v.views.toLocaleString('vi-VN')}, Lượt thích: ${v.likes.toLocaleString('vi-VN')})\n`;
+      });
+      prompt += `\n`;
+  
+      if (keywords.length > 0) {
+          prompt += `--- CÁC TỪ KHÓA CHÍNH TRONG TIÊU ĐỀ ---\n`;
+          prompt += `${keywords.map(k => k.text).join(', ')}\n\n`;
+      }
+  
+      if (hashtags.length > 0) {
+          prompt += `--- CÁC HASHTAG PHỔ BIẾN ---\n`;
+          prompt += `${hashtags.slice(0, 10).map(h => h.text).join(' ')}\n\n`;
+      }
+  
+      prompt += `--- YÊU CẦU ---\n`;
+      prompt += `Dựa trên toàn bộ dữ liệu trên, hãy giúp tôi brainstorm ý tưởng.\n`;
+      prompt += `Bắt đầu bằng cách đề xuất 3 hướng đi (concept) độc đáo cho một kênh tương tự nhưng có sự khác biệt để nổi bật. Trình bày mỗi concept với một tiêu đề hấp dẫn và một đoạn mô tả ngắn gọn về nội dung và đối tượng khán giả.`;
+  
+      return prompt;
   }, []);
 
-  const handleChatWithAiClick = useCallback(() => {
-    setChatTitle('Chat với AI');
-    setChatHistory([{
-        role: 'model',
-        content: 'Xin chào! Tôi là trợ lý AI của bạn. Bạn có câu hỏi nào về kênh này hoặc cần phân tích dữ liệu không?'
-    }]);
+  const handleBrainstormClick = useCallback(async () => {
     setIsBrainstormOpen(true);
-  }, []);
+
+    // If chat is empty and we have data, start the initial brainstorm session
+    if (chatHistory.length === 0 && videos.length > 0) {
+      setChatHistory([{ role: 'model', content: "Đang phân tích dữ liệu kênh để đưa ra ý tưởng..." }]);
+      
+      try {
+        const comprehensivePrompt = generateComprehensivePrompt(videos, keywords, hashtags, channelDetails);
+        const initialHistory: ChatMessage[] = [{ role: 'user', content: comprehensivePrompt }];
+        const response = await handleAiChat(initialHistory);
+        // The user prompt is part of the context, so we don't show it. We start with the AI's response.
+        setChatHistory([{ role: 'model', content: response }]);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
+        setChatHistory([{ role: 'model', content: `Xin lỗi, đã có lỗi xảy ra khi tạo ý tưởng ban đầu: ${errorMessage}` }]);
+      }
+    }
+  }, [chatHistory, videos, keywords, hashtags, channelDetails, handleAiChat, generateComprehensivePrompt]);
 
 
   return (
@@ -463,47 +454,39 @@ const App: React.FC = () => {
                   <div className="flex flex-col items-center justify-center text-center">
                     <h3 className="text-lg font-semibold text-white mb-3">Công cụ Phân tích & Sáng tạo</h3>
                     <p className="text-sm text-gray-400 mb-4">Sử dụng các công cụ để hiểu sâu hơn về kênh và tìm kiếm ý tưởng mới.</p>
-                     <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                       <button
-                          onClick={() => setIsChannelInfoModalOpen(true)}
-                          disabled={!channelDetails}
-                          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 flex items-center justify-center"
+                     <div className="w-full space-y-3">
+                        <button
+                            onClick={handleBrainstormClick}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                            Thống kê
-                        </button>
-                         <button
-                            onClick={() => setIsHashtagModalOpen(true)}
-                            disabled={hashtags.length === 0}
-                            className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 flex items-center justify-center"
-                          >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                            </svg>
-                            Thẻ tag
-                          </button>
-                          <button
-                            onClick={handleBrainstormClick}
-                            disabled={videos.length === 0}
-                            className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
-                          >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
                             </svg>
                             Brainstorm Ý tưởng
-                          </button>
-                          <button
-                            onClick={handleChatWithAiClick}
-                            disabled={videos.length === 0}
-                            className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50 flex items-center justify-center"
-                          >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                              </svg>
-                              Chat với AI
-                          </button>
+                        </button>
+                        <div className="flex gap-3">
+                           <button
+                              onClick={() => setIsChannelInfoModalOpen(true)}
+                              disabled={!channelDetails}
+                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 flex items-center justify-center"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                Thống kê
+                            </button>
+                             <button
+                                onClick={() => setIsHashtagModalOpen(true)}
+                                disabled={hashtags.length === 0}
+                                className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 flex items-center justify-center"
+                              >
+                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                                </svg>
+                                Thẻ tag
+                              </button>
+                        </div>
                     </div>
                   </div>
               </div>
@@ -533,18 +516,12 @@ const App: React.FC = () => {
       <ApiManagementModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        youtubeApiKeys={youtubeApiKeys}
-        setYoutubeApiKeys={setYoutubeApiKeys}
-        activeYoutubeKeyId={activeYoutubeKeyId}
-        setActiveYoutubeKeyId={setActiveYoutubeKeyId}
-        geminiApiKeys={geminiApiKeys}
-        setGeminiApiKeys={setGeminiApiKeys}
-        activeGeminiKeyId={activeGeminiKeyId}
-        setActiveGeminiKeyId={setActiveGeminiKeyId}
-        openaiApiKeys={openaiApiKeys}
-        setOpenaiApiKeys={setOpenaiApiKeys}
-        activeOpenaiKeyId={activeOpenaiKeyId}
-        setActiveOpenaiKeyId={setActiveOpenaiKeyId}
+        geminiApiKey={geminiApiKey}
+        setGeminiApiKey={setGeminiApiKey}
+        openaiApiKey={openaiApiKey}
+        setOpenaiApiKey={setOpenaiApiKey}
+        youtubeApiKey={youtubeApiKey}
+        setYoutubeApiKey={setYoutubeApiKey}
         selectedGeminiModel={selectedGeminiModel}
         setSelectedGeminiModel={setSelectedGeminiModel}
         selectedOpenaiModel={selectedOpenaiModel}
@@ -557,18 +534,17 @@ const App: React.FC = () => {
         onLoad={handleLoadSession}
         onDelete={handleDeleteSession}
       />
-      <BrainstormChat
-        isOpen={isBrainstormOpen}
-        onClose={() => setIsBrainstormOpen(false)}
-        chatHistory={chatHistory}
-        setChatHistory={setChatHistory}
-        onSendMessage={handleAiChat}
-        provider={selectedProvider}
-        channelDetails={channelDetails}
-        title={chatTitle}
-      />
       {videos.length > 0 && (
         <>
+          <BrainstormChat
+            isOpen={isBrainstormOpen}
+            onClose={() => setIsBrainstormOpen(false)}
+            chatHistory={chatHistory}
+            setChatHistory={setChatHistory}
+            onSendMessage={handleAiChat}
+            provider={selectedProvider}
+            channelDetails={channelDetails}
+          />
           <HashtagModal
             isOpen={isHashtagModalOpen}
             onClose={() => setIsHashtagModalOpen(false)}
