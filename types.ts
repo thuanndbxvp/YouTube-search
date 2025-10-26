@@ -6,7 +6,6 @@ export interface VideoData {
   publishedAt: string;
   views: number;
   likes: number;
-  summary: string;
   duration: string;
 }
 

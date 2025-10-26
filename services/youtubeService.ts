@@ -125,7 +125,6 @@ export async function getVideoDetails(videoIds: string[], apiKey: string): Promi
         publishedAt: item.snippet.publishedAt,
         views: parseInt(item.statistics.viewCount, 10) || 0,
         likes: parseInt(item.statistics.likeCount, 10) || 0,
-        summary: 'Đang chờ tóm tắt...',
         duration: parseISO8601Duration(item.contentDetails.duration),
     }));
 }

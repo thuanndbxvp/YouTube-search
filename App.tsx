@@ -1,8 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage } from './types';
 import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails } from './services/youtubeService';
-import { generateVideoSummary as generateGeminiSummary } from './services/geminiService';
-import { generateVideoSummary as generateOpenaiSummary, generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
+import { generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
 import { LoadingSpinner } from './components/LoadingSpinner';
@@ -47,43 +46,6 @@ const App: React.FC = () => {
     setSelectedProvider((localStorage.getItem('selectedProvider') as AiProvider) || 'gemini');
   }, []);
   
-  const generateSummariesForVideos = (videosToProcess: VideoData[]) => {
-      const providerApiKey = selectedProvider === 'gemini' ? geminiApiKey : openaiApiKey;
-      if (!providerApiKey) {
-        const errorMsg = `Lỗi: Vui lòng nhập API Key cho ${selectedProvider === 'gemini' ? 'Gemini' : 'OpenAI'} trong phần Quản lý API để tạo tóm tắt.`;
-        setError(prev => prev ? `${prev}\n${errorMsg}` : errorMsg);
-        setVideos(currentVideos => currentVideos.map(v => ({...v, summary: 'Lỗi: Thiếu API key.'})));
-        return;
-      }
-
-      videosToProcess.forEach(video => {
-        const generateFunction = selectedProvider === 'gemini' 
-            ? generateGeminiSummary
-            : generateOpenaiSummary;
-        
-        const model = selectedProvider === 'gemini' 
-            ? selectedGeminiModel 
-            : selectedOpenaiModel;
-
-        generateFunction(video.title, providerApiKey, model)
-            .then(summary => {
-                setVideos(currentVideos => 
-                    currentVideos.map(v => 
-                        v.id === video.id ? { ...v, summary } : v
-                    )
-                );
-            })
-            .catch(err => {
-                console.error(`Failed to generate summary for video ${video.id}`, err);
-                setVideos(currentVideos => 
-                    currentVideos.map(v => 
-                        v.id === video.id ? { ...v, summary: `Lỗi tóm tắt: ${err.message}` } : v
-                    )
-                );
-            });
-      });
-  };
-
   const loadVideos = useCallback(async (playlistId: string, pageToken?: string) => {
     try {
       const { videoIds, nextPageToken: newNextPageToken } = await getPaginatedVideoIds(playlistId, youtubeApiKey, pageToken);
@@ -99,15 +61,12 @@ const App: React.FC = () => {
       setVideos(currentVideos => pageToken ? [...currentVideos, ...newVideos] : newVideos);
       setNextPageToken(newNextPageToken);
 
-      // Generate summaries for the new videos
-      generateSummariesForVideos(newVideos);
-
     } catch (e) {
        const errorMessage = e instanceof Error ? e.message : 'Đã xảy ra lỗi không xác định.';
        setError(`Không thể tải video: ${errorMessage}`);
        console.error(e);
     }
-  }, [youtubeApiKey, selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
+  }, [youtubeApiKey]);
 
 
   const handleAnalyze = useCallback(async () => {
