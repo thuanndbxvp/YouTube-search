@@ -405,7 +405,11 @@ const App: React.FC = () => {
   const handleBrainstormClick = useCallback(() => {
     if (videos.length === 0 || !channelDetails) return;
 
-    const videoList = sortedVideos.slice(0, 15).map(v => 
+    const top5ViewedVideos = [...videos]
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 5);
+
+    const videoList = top5ViewedVideos.map(v => 
         `- "${v.title}" (Lượt xem: ${v.views.toLocaleString('vi-VN')}, Lượt thích: ${v.likes.toLocaleString('vi-VN')})`
     ).join('\n');
 
@@ -419,11 +423,11 @@ Bạn là một chuyên gia chiến lược nội dung YouTube dày dặn kinh n
 - **Người đăng ký:** ${channelDetails.subscriberCount.toLocaleString('vi-VN')}
 - **Tổng lượt xem:** ${channelDetails.viewCount.toLocaleString('vi-VN')}
 
-**Danh sách 15 video gần đây nhất (hoặc phổ biến nhất):**
+**Danh sách 5 video có lượt xem nhiều nhất:**
 ${videoList}
 
 **Nhiệm vụ của bạn:**
-1.  **Phân tích:** Dựa vào dữ liệu trên, hãy phân tích nhanh các chủ đề, định dạng hoặc mẫu nội dung nào đang hoạt động tốt nhất cho kênh này.
+1.  **Phân tích:** Dựa vào dữ liệu trên, hãy phân tích nhanh các chủ đề, định dạng hoặc mẫu nội dung nào đang hoạt động tốt nhất cho kênh này. Chú ý vào các video thành công nhất.
 2.  **Đề xuất:** Gợi ý 3-5 ý tưởng video mới hoặc hướng phát triển nội dung mới cho kênh này, dựa trên công thức thành công mà bạn đã phân tích. Mỗi ý tưởng cần có tiêu đề hấp dẫn và mô tả ngắn gọn.
 3.  **Chào hỏi:** Bắt đầu cuộc trò chuyện bằng cách tóm tắt phân tích của bạn, đưa ra các đề xuất, và sau đó hỏi tôi "Dựa trên những phân tích này, bạn muốn chúng ta đào sâu vào khía cạnh nào hoặc brainstorm thêm về ý tưởng cụ thể nào không?".
 
@@ -444,7 +448,7 @@ Hãy bắt đầu ngay bây giờ.
             const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
             setChatHistory([{ role: 'model', content: `Rất tiếc, đã xảy ra lỗi khi phân tích ban đầu: ${errorMessage}` }]);
         });
-  }, [videos, channelDetails, sortedVideos, handleAiChat]);
+  }, [videos, channelDetails, handleAiChat]);
 
 
   return (
