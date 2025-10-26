@@ -65,7 +65,18 @@ export async function generateVideoSummary(title: string, apiKey: string, model:
       if (!response.ok) {
         throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
       }
-      return data.choices[0]?.message?.content?.trim() || "Không nhận được phản hồi hợp lệ từ API.";
+
+      const responseText = data.choices[0]?.message?.content?.trim();
+      if (!responseText) {
+          console.warn("OpenAI response was empty.", data);
+          const finishReason = data.choices[0]?.finish_reason;
+          if (finishReason === 'content_filter') {
+               return "Phản hồi đã bị chặn bởi bộ lọc nội dung của OpenAI. Vui lòng thử một câu hỏi khác.";
+          }
+          return `Không nhận được phản hồi hợp lệ từ OpenAI. Lý do: ${finishReason || "Không rõ"}.`;
+      }
+      return responseText;
+
     } catch (error) {
       console.error("Error generating chat response with OpenAI:", error);
       const errorMessage = error instanceof Error ? error.message : "Lỗi không xác định";

@@ -45,7 +45,20 @@ export async function generateChatResponse(history: ChatMessage[], apiKey: strin
             contents: contents,
         });
 
-        return response.text;
+        const text = response.text;
+        
+        if (!text) {
+            const finishReason = response.candidates?.[0]?.finishReason;
+            const safetyRatings = response.candidates?.[0]?.safetyRatings;
+            console.warn("Gemini response was empty.", { finishReason, safetyRatings });
+
+            if (finishReason === 'SAFETY') {
+                return "Phản hồi đã bị chặn vì lý do an toàn. Vui lòng thử một câu hỏi khác hoặc điều chỉnh cài đặt an toàn nếu có thể.";
+            }
+            return `Không nhận được phản hồi văn bản từ Gemini. Lý do: ${finishReason || "Không rõ"}. Vui lòng kiểm tra lại prompt hoặc thử lại sau.`;
+        }
+        
+        return text;
 
     } catch (error) {
         console.error("Error generating chat response with Gemini:", error);
