@@ -48,6 +48,7 @@ const App: React.FC = () => {
   // Brainstorm State
   const [isBrainstormOpen, setIsBrainstormOpen] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatTitle, setChatTitle] = useState<string>('');
 
   // Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
@@ -403,104 +404,22 @@ const App: React.FC = () => {
   }, [selectedProvider, geminiApiKeys, activeGeminiKeyId, selectedGeminiModel, openaiApiKeys, activeOpenaiKeyId, selectedOpenaiModel]);
   
   const handleBrainstormClick = useCallback(() => {
-    if (videos.length === 0 || !channelDetails) return;
-
-    const top5ViewedVideos = [...videos]
-        .sort((a, b) => b.views - a.views)
-        .slice(0, 5);
-
-    const videoList = top5ViewedVideos.map(v => 
-        `- "${v.title}" (Lượt xem: ${v.views.toLocaleString('vi-VN')}, Lượt thích: ${v.likes.toLocaleString('vi-VN')})`
-    ).join('\n');
-
-    const initialPrompt = `
-**Bối cảnh:**
-Bạn là một chuyên gia chiến lược nội dung YouTube dày dặn kinh nghiệm. Tôi đang phân tích một kênh và cần sự giúp đỡ của bạn để brainstorm các ý tưởng mới.
-
-**Dữ liệu kênh được phân tích:**
-- **Tên kênh:** ${channelDetails.title}
-- **Mô tả kênh:** ${channelDetails.description.substring(0, 200)}...
-- **Người đăng ký:** ${channelDetails.subscriberCount.toLocaleString('vi-VN')}
-- **Tổng lượt xem:** ${channelDetails.viewCount.toLocaleString('vi-VN')}
-
-**Danh sách 5 video có lượt xem nhiều nhất:**
-${videoList}
-
-**Nhiệm vụ của bạn:**
-1.  **Phân tích:** Dựa vào dữ liệu trên, hãy phân tích nhanh các chủ đề, định dạng hoặc mẫu nội dung nào đang hoạt động tốt nhất cho kênh này. Chú ý vào các video thành công nhất.
-2.  **Đề xuất:** Gợi ý 3-5 ý tưởng video mới hoặc hướng phát triển nội dung mới cho kênh này, dựa trên công thức thành công mà bạn đã phân tích. Mỗi ý tưởng cần có tiêu đề hấp dẫn và mô tả ngắn gọn.
-3.  **Chào hỏi:** Bắt đầu cuộc trò chuyện bằng cách tóm tắt phân tích của bạn, đưa ra các đề xuất, và sau đó hỏi tôi "Dựa trên những phân tích này, bạn muốn chúng ta đào sâu vào khía cạnh nào hoặc brainstorm thêm về ý tưởng cụ thể nào không?".
-
-Hãy bắt đầu ngay bây giờ.
-    `;
-    
-    const analysisMessage: ChatMessage = { role: 'user', content: initialPrompt };
-    const waitingMessage: ChatMessage = { role: 'model', content: "Đang phân tích dữ liệu kênh để chuẩn bị brainstorm... Vui lòng chờ trong giây lát." };
-
-    setChatHistory([analysisMessage, waitingMessage]);
+    setChatTitle('Brainstorm Ý tưởng');
+    setChatHistory([{
+      role: 'model',
+      content: 'Xin chào! Hãy bắt đầu brainstorm ý tưởng cho kênh YouTube của bạn. Bạn muốn bắt đầu từ đâu?'
+    }]);
     setIsBrainstormOpen(true);
-
-    handleAiChat([analysisMessage])
-        .then(response => {
-            const fullHistory: ChatMessage[] = [
-                analysisMessage,
-                { role: 'model', content: response }
-            ];
-            setChatHistory(fullHistory);
-        })
-        .catch(err => {
-            const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
-            setChatHistory([analysisMessage, { role: 'model', content: `Rất tiếc, đã xảy ra lỗi khi phân tích ban đầu: ${errorMessage}` }]);
-        });
-  }, [videos, channelDetails, handleAiChat]);
+  }, []);
 
   const handleChatWithAiClick = useCallback(() => {
-    if (videos.length === 0 || !channelDetails) return;
-
-    const top5ViewedVideos = [...videos]
-        .sort((a, b) => b.views - a.views)
-        .slice(0, 5);
-
-    const videoList = top5ViewedVideos.map(v => 
-        `- Tiêu đề: "${v.title}", Lượt xem: ${v.views.toLocaleString('vi-VN')}`
-    ).join('\n');
-
-    const initialPrompt = `
-**Bối cảnh:**
-Bạn là một chuyên gia phân tích dữ liệu và chiến lược gia nội dung cho YouTube. Tôi đã thu thập dữ liệu về một kênh và sẽ đặt câu hỏi để phân tích sâu hơn.
-
-**Dữ liệu kênh:**
-- **Tên kênh:** ${channelDetails.title}
-- **Người đăng ký:** ${channelDetails.subscriberCount.toLocaleString('vi-VN')}
-- **Tổng lượt xem:** ${channelDetails.viewCount.toLocaleString('vi-VN')}
-- **Tổng số video đã tải lên trong phiên này:** ${videos.length}
-
-**Một vài video có lượt xem cao nhất để làm mẫu:**
-${videoList}
-
-**Nhiệm vụ của bạn:**
-Bắt đầu cuộc trò chuyện bằng cách chào tôi một cách thân thiện và xác nhận rằng bạn đã sẵn sàng phân tích dữ liệu. Hãy hỏi tôi muốn bắt đầu từ đâu. Ví dụ: "Xin chào! Tôi đã xem qua dữ liệu của kênh '${channelDetails.title}'. Bạn muốn chúng ta bắt đầu phân tích khía cạnh nào đầu tiên?"
-    `;
-    
-    const contextMessage: ChatMessage = { role: 'user', content: initialPrompt };
-    const waitingMessage: ChatMessage = { role: 'model', content: "Đang khởi tạo trợ lý AI... Vui lòng chờ." };
-
-    setChatHistory([contextMessage, waitingMessage]);
+    setChatTitle('Chat với AI');
+    setChatHistory([{
+        role: 'model',
+        content: 'Xin chào! Tôi là trợ lý AI của bạn. Bạn có câu hỏi nào về kênh này hoặc cần phân tích dữ liệu không?'
+    }]);
     setIsBrainstormOpen(true);
-
-    handleAiChat([contextMessage])
-        .then(response => {
-            const fullHistory: ChatMessage[] = [
-                contextMessage,
-                { role: 'model', content: response }
-            ];
-            setChatHistory(fullHistory);
-        })
-        .catch(err => {
-            const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
-            setChatHistory([contextMessage, { role: 'model', content: `Rất tiếc, đã xảy ra lỗi khi khởi tạo AI: ${errorMessage}` }]);
-        });
-  }, [videos, channelDetails, handleAiChat]);
+  }, []);
 
 
   return (
@@ -646,6 +565,7 @@ Bắt đầu cuộc trò chuyện bằng cách chào tôi một cách thân thi�
         onSendMessage={handleAiChat}
         provider={selectedProvider}
         channelDetails={channelDetails}
+        title={chatTitle}
       />
       {videos.length > 0 && (
         <>
