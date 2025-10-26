@@ -83,7 +83,10 @@ export async function getPaginatedVideoIds(playlistId: string, apiKey:string, pa
         return { videoIds: [], nextPageToken: undefined };
     }
     
-    const videoIds = data.items.map((item: any) => item.contentDetails.videoId);
+    const videoIds = data.items
+        .map((item: any) => item?.contentDetails?.videoId)
+        .filter((id: string | undefined): id is string => !!id);
+        
     return { videoIds, nextPageToken: data.nextPageToken };
 }
 

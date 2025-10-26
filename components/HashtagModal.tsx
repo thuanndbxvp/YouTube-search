@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { HashtagData } from '../types';
 
 interface HashtagModalProps {
@@ -12,7 +12,34 @@ export const HashtagModal: React.FC<HashtagModalProps> = ({
   onClose,
   hashtags,
 }) => {
+  const [isCopied, setIsCopied] = useState(false);
+
+  useEffect(() => {
+    if (isCopied) {
+      const timer = setTimeout(() => setIsCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isCopied]);
+
   if (!isOpen) return null;
+
+  const handleCopy = () => {
+    const textToCopy = hashtags.map(h => h.text).join('\n');
+    navigator.clipboard.writeText(textToCopy);
+    setIsCopied(true);
+  };
+
+  const handleDownloadTxt = () => {
+    const textToSave = hashtags.map(h => h.text).join('\n');
+    const blob = new Blob([textToSave], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'hashtags.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
 
   return (
     <div 
@@ -52,10 +79,31 @@ export const HashtagModal: React.FC<HashtagModalProps> = ({
             )}
         </div>
         
-        <div className="flex justify-end pt-4 border-t border-gray-700 mt-4">
+        <div className="flex justify-between items-center pt-4 border-t border-gray-700 mt-4 gap-3">
+          <div className="flex gap-3">
+             <button 
+                onClick={handleCopy} 
+                className={`flex items-center ${isCopied ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold py-2 px-4 rounded-md transition-colors duration-300`}
+              >
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                   <path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" />
+                   <path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2V5h6a2 2 0 00-2-2H5z" />
+                 </svg>
+                {isCopied ? 'Đã sao chép!' : 'Sao chép tất cả'}
+              </button>
+               <button 
+                onClick={handleDownloadTxt} 
+                className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-300"
+              >
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                Tải về (.txt)
+              </button>
+          </div>
           <button 
             onClick={onClose} 
-            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-md transition-colors duration-300"
+            className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-6 rounded-md transition-colors duration-300"
           >
             Đóng
           </button>
