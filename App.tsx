@@ -359,7 +359,7 @@ const App: React.FC = () => {
     hashtags: HashtagData[], 
     channelDetails: ChannelDetails | null
   ): string => {
-      const topVideos = [...videos].sort((a,b) => b.views - a.views).slice(0, 5);
+      const allVideosSortedByViews = [...videos].sort((a, b) => b.views - a.views);
       
       let prompt = `Bạn là một nhà chiến lược sáng tạo nội dung YouTube. Tôi đã phân tích một kênh và có các dữ liệu sau:\n\n`;
   
@@ -369,8 +369,8 @@ const App: React.FC = () => {
           prompt += `Mô tả: ${channelDetails.description.substring(0, 300)}...\n\n`;
       }
   
-      prompt += `--- CÁC VIDEO NỔI BẬT NHẤT (THEO LƯỢT XEM) ---\n`;
-      topVideos.forEach((v, i) => {
+      prompt += `--- DANH SÁCH VIDEO ĐÃ PHÂN TÍCH (SẮP XẾP THEO LƯỢT XEM) ---\n`;
+      allVideosSortedByViews.forEach((v, i) => {
           prompt += `${i + 1}. Tiêu đề: "${v.title}" (Lượt xem: ${v.views.toLocaleString('vi-VN')}, Lượt thích: ${v.likes.toLocaleString('vi-VN')})\n`;
       });
       prompt += `\n`;
