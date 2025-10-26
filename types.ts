@@ -11,5 +11,15 @@ export interface VideoData {
 
 export type AiProvider = 'gemini' | 'openai';
 
-export type SortKey = 'publishedAt' | 'views' | 'likes';
+export type SortKey = 'publishedAt' | 'views' | 'likes' | 'duration';
 export type SortOrder = 'asc' | 'desc';
+
+export interface KeywordData {
+  text: string;
+  count: number;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
+}

@@ -71,7 +71,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onSort, sort
             <SortableHeader title="Ngày đăng" sortKeyName="publishedAt" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <SortableHeader title="Lượt xem" sortKeyName="views" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <SortableHeader title="Lượt thích" sortKeyName="likes" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Thời lượng</th>
+            <SortableHeader title="Thời lượng" sortKeyName="duration" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-1/3">Tóm Tắt AI</th>
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Hành động</th>
           </tr>

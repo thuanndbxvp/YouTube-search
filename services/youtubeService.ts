@@ -3,7 +3,7 @@ import type { VideoData } from '../types';
 const API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
 // Tách ID kênh từ các định dạng URL khác nhau một cách thông minh
-async function getChannelIdFromUrl(url: string, apiKey: string): Promise<string> {
+export async function getChannelIdFromUrl(url: string, apiKey: string): Promise<string> {
     try {
         const urlObject = new URL(url);
         const pathParts = urlObject.pathname.split('/').filter(p => p);
@@ -56,7 +56,7 @@ async function getChannelIdFromUrl(url: string, apiKey: string): Promise<string>
 
 
 // Lấy ID của playlist chứa các video đã tải lên
-async function getUploadsPlaylistId(channelId: string, apiKey: string): Promise<string> {
+export async function getUploadsPlaylistId(channelId: string, apiKey: string): Promise<string> {
     const url = `${API_BASE_URL}/channels?part=contentDetails&id=${channelId}&key=${apiKey}`;
     const response = await fetch(url);
     const data = await response.json();
@@ -66,15 +66,25 @@ async function getUploadsPlaylistId(channelId: string, apiKey: string): Promise<
     return data.items[0].contentDetails.relatedPlaylists.uploads;
 }
 
-// Lấy ID các video từ playlist
-async function getVideoIds(playlistId: string, apiKey:string): Promise<string[]> {
-    const url = `${API_BASE_URL}/playlistItems?part=contentDetails&playlistId=${playlistId}&maxResults=50&key=${apiKey}`;
+// Lấy ID các video từ playlist, hỗ trợ phân trang
+export async function getPaginatedVideoIds(playlistId: string, apiKey:string, pageToken?: string): Promise<{ videoIds: string[], nextPageToken?: string }> {
+    let url = `${API_BASE_URL}/playlistItems?part=contentDetails&playlistId=${playlistId}&maxResults=50&key=${apiKey}`;
+    if (pageToken) {
+        url += `&pageToken=${pageToken}`;
+    }
     const response = await fetch(url);
     const data = await response.json();
-    if (!data.items) {
-        throw new Error("Không thể lấy danh sách video từ kênh.");
+
+    if (data.error) {
+        throw new Error(`Lỗi YouTube API: ${data.error.message}`);
     }
-    return data.items.map((item: any) => item.contentDetails.videoId);
+    if (!data.items) {
+        // This can happen on a valid channel with no videos
+        return { videoIds: [], nextPageToken: undefined };
+    }
+    
+    const videoIds = data.items.map((item: any) => item.contentDetails.videoId);
+    return { videoIds, nextPageToken: data.nextPageToken };
 }
 
 // Chuyển đổi thời lượng ISO 8601 sang định dạng dễ đọc (HH:MM:SS hoặc MM:SS)
@@ -99,7 +109,9 @@ function parseISO8601Duration(duration: string): string {
 }
 
 // Lấy thông tin chi tiết của video (thống kê, snippet, thời lượng)
-async function getVideoDetails(videoIds: string[], apiKey: string): Promise<VideoData[]> {
+export async function getVideoDetails(videoIds: string[], apiKey: string): Promise<VideoData[]> {
+    if (videoIds.length === 0) return [];
+    
     const url = `${API_BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${videoIds.join(',')}&key=${apiKey}`;
     const response = await fetch(url);
     const data = await response.json();
@@ -114,29 +126,5 @@ async function getVideoDetails(videoIds: string[], apiKey: string): Promise<Vide
         likes: parseInt(item.statistics.likeCount, 10) || 0,
         summary: 'Đang chờ tóm tắt...',
         duration: parseISO8601Duration(item.contentDetails.duration),
-    })).sort((a: VideoData, b: VideoData) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()); // Sắp xếp theo ngày mới nhất
-}
-
-
-export async function fetchChannelVideos(channelUrl: string, apiKey: string): Promise<VideoData[]> {
-    try {
-        const channelId = await getChannelIdFromUrl(channelUrl, apiKey);
-        const playlistId = await getUploadsPlaylistId(channelId, apiKey);
-        const videoIds = await getVideoIds(playlistId, apiKey);
-        if (videoIds.length === 0) {
-            return [];
-        }
-        const videos = await getVideoDetails(videoIds, apiKey);
-        return videos;
-    } catch (error) {
-        console.error("Lỗi khi lấy dữ liệu từ YouTube API:", error);
-        if (error instanceof Error) {
-            // Kiểm tra các lỗi API phổ biến
-            if (error.message.includes("key") || error.message.includes("quota")) {
-                 throw new Error(`Lỗi YouTube API: API Key không hợp lệ hoặc đã hết hạn ngạch. Vui lòng kiểm tra lại key.`);
-            }
-            throw new Error(`Lỗi YouTube API: ${error.message}`);
-        }
-        throw new Error("Đã xảy ra lỗi không xác định khi giao tiếp với YouTube API.");
-    }
+    }));
 }

@@ -1,3 +1,5 @@
+import type { ChatMessage } from '../types';
+
 export async function generateVideoSummary(title: string, apiKey: string, model: string): Promise<string> {
     if (!apiKey) {
       throw new Error("API Key của OpenAI không được cung cấp.");
@@ -39,4 +41,39 @@ export async function generateVideoSummary(title: string, apiKey: string, model:
       throw new Error(`Lỗi OpenAI API: ${errorMessage}`);
     }
   }
-  
+
+export async function generateChatResponse(history: ChatMessage[], apiKey: string, model: string): Promise<string> {
+  if (!apiKey) {
+    throw new Error("API Key của OpenAI không được cung cấp.");
+  }
+
+  const API_URL = "https://api.openai.com/v1/chat/completions";
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: history.map(msg => ({ role: msg.role, content: msg.content })),
+        temperature: 0.8,
+        stream: false,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return data.choices[0]?.message?.content?.trim() || "Không nhận được phản hồi hợp lệ từ API.";
+  } catch (error) {
+    console.error("Error generating chat response with OpenAI:", error);
+    const errorMessage = error instanceof Error ? error.message : "Lỗi không xác định";
+    throw new Error(`Lỗi OpenAI API: ${errorMessage}`);
+  }
+}
