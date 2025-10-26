@@ -41,3 +41,19 @@ export interface ChannelDetails {
   viewCount: number;
   thumbnailUrl: string;
 }
+
+export interface SessionData {
+  channelUrl: string;
+  videos: VideoData[];
+  channelDetails: ChannelDetails | null;
+  chatHistory: ChatMessage[];
+}
+
+export interface Session {
+  id: number; // timestamp
+  name: string;
+  createdAt: string;
+  channelTitle: string;
+  videoCount: number;
+  data: SessionData;
+}

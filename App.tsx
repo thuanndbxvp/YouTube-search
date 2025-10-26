@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData, ChannelDetails } from './types';
+import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData, ChannelDetails, Session } from './types';
 import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails, getChannelDetails } from './services/youtubeService';
 import { generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
@@ -13,6 +13,7 @@ import { KeywordAnalysis } from './components/KeywordAnalysis';
 import { BrainstormChat } from './components/BrainstormChat';
 import { HashtagModal } from './components/HashtagModal';
 import { ChannelInfoModal } from './components/ChannelInfoModal';
+import { LibraryModal } from './components/LibraryModal';
 import { GoogleGenAI } from '@google/genai';
 
 const App: React.FC = () => {
@@ -41,9 +42,13 @@ const App: React.FC = () => {
   const [channelDetails, setChannelDetails] = useState<ChannelDetails | null>(null);
   const [isChannelInfoModalOpen, setIsChannelInfoModalOpen] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  
+  // Library State
+  const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
+  const [savedSessions, setSavedSessions] = useState<Session[]>([]);
 
 
-  // Load API settings from localStorage on initial render
+  // Load API settings & sessions from localStorage on initial render
   useEffect(() => {
     setGeminiApiKey(localStorage.getItem('geminiApiKey') || '');
     setOpenaiApiKey(localStorage.getItem('openaiApiKey') || '');
@@ -51,6 +56,11 @@ const App: React.FC = () => {
     setSelectedGeminiModel(localStorage.getItem('selectedGeminiModel') || 'gemini-2.5-flash');
     setSelectedOpenaiModel(localStorage.getItem('selectedOpenaiModel') || 'gpt-3.5-turbo');
     setSelectedProvider((localStorage.getItem('selectedProvider') as AiProvider) || 'gemini');
+
+    const storedSessions = localStorage.getItem('youtube-analyzer-sessions');
+    if (storedSessions) {
+        setSavedSessions(JSON.parse(storedSessions));
+    }
   }, []);
   
   const loadVideos = useCallback(async (playlistId: string, pageToken?: string) => {
@@ -153,6 +163,58 @@ const App: React.FC = () => {
       setIsMoreLoading(false);
   }, [uploadsPlaylistId, nextPageToken, loadVideos]);
 
+  // Library functions
+  const handleSaveSession = useCallback(() => {
+    const sessionName = prompt("Nhập tên cho phiên làm việc này:", channelDetails?.title || "Phiên chưa có tên");
+    if (!sessionName) return;
+
+    const newSession: Session = {
+        id: Date.now(),
+        name: sessionName,
+        createdAt: new Date().toISOString(),
+        channelTitle: channelDetails?.title || 'Không rõ',
+        videoCount: videos.length,
+        data: {
+            channelUrl,
+            videos,
+            channelDetails,
+            chatHistory
+        }
+    };
+
+    const updatedSessions = [...savedSessions, newSession];
+    setSavedSessions(updatedSessions);
+    localStorage.setItem('youtube-analyzer-sessions', JSON.stringify(updatedSessions));
+    alert(`Phiên "${sessionName}" đã được lưu!`);
+  }, [channelUrl, videos, channelDetails, chatHistory, savedSessions]);
+    
+  const handleLoadSession = useCallback((sessionId: number) => {
+    const sessionToLoad = savedSessions.find(s => s.id === sessionId);
+    if (sessionToLoad) {
+        const { data } = sessionToLoad;
+        setChannelUrl(data.channelUrl);
+        setVideos(data.videos);
+        setChannelDetails(data.channelDetails);
+        setChatHistory(data.chatHistory);
+        
+        setError(null);
+        setIsLoading(false);
+        setIsMoreLoading(false);
+        setNextPageToken(undefined);
+        setSortKey('publishedAt');
+        setSortOrder('desc');
+        
+        setIsLibraryOpen(false);
+    }
+  }, [savedSessions]);
+    
+  const handleDeleteSession = useCallback((sessionId: number) => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa phiên này không?")) {
+        const updatedSessions = savedSessions.filter(s => s.id !== sessionId);
+        setSavedSessions(updatedSessions);
+        localStorage.setItem('youtube-analyzer-sessions', JSON.stringify(updatedSessions));
+    }
+  }, [savedSessions]);
 
   const handleSort = useCallback((key: SortKey) => {
     if (sortKey === key) {
@@ -354,7 +416,12 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
       <main className="container mx-auto px-4 py-8">
-        <AppHeader onOpenApiModal={() => setIsModalOpen(true)} />
+        <AppHeader 
+          onOpenApiModal={() => setIsModalOpen(true)}
+          onOpenLibraryModal={() => setIsLibraryOpen(true)}
+          onSaveSession={handleSaveSession}
+          isSaveDisabled={videos.length === 0}
+        />
         <UrlInputForm
           channelUrl={channelUrl}
           setChannelUrl={setChannelUrl}
@@ -460,6 +527,13 @@ const App: React.FC = () => {
         selectedOpenaiModel={selectedOpenaiModel}
         setSelectedOpenaiModel={setSelectedOpenaiModel}
       />
+      <LibraryModal
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        sessions={savedSessions}
+        onLoad={handleLoadSession}
+        onDelete={handleDeleteSession}
+      />
       {videos.length > 0 && (
         <>
           <BrainstormChat
@@ -469,6 +543,7 @@ const App: React.FC = () => {
             setChatHistory={setChatHistory}
             onSendMessage={handleAiChat}
             provider={selectedProvider}
+            channelDetails={channelDetails}
           />
           <HashtagModal
             isOpen={isHashtagModalOpen}

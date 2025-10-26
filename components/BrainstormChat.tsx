@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import type { ChatMessage, AiProvider } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import type { ChatMessage, AiProvider, ChannelDetails } from '../types';
 
 interface BrainstormChatProps {
   isOpen: boolean;
@@ -8,6 +8,7 @@ interface BrainstormChatProps {
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onSendMessage: (history: ChatMessage[]) => Promise<string>;
   provider: AiProvider;
+  channelDetails: ChannelDetails | null;
 }
 
 export const BrainstormChat: React.FC<BrainstormChatProps> = ({
@@ -17,6 +18,7 @@ export const BrainstormChat: React.FC<BrainstormChatProps> = ({
   setChatHistory,
   onSendMessage,
   provider,
+  channelDetails,
 }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false); // For user-sent messages
@@ -50,6 +52,33 @@ export const BrainstormChat: React.FC<BrainstormChatProps> = ({
     }
   };
   
+  const handleDownloadChat = useCallback(() => {
+    if (chatHistory.length === 0) return;
+
+    const providerName = provider === 'gemini' ? 'Gemini' : 'OpenAI';
+    const channelName = channelDetails?.title?.replace(/[^a-zA-Z0-9]/g, '_') || 'unknown-channel';
+    const date = new Intl.DateTimeFormat('sv-SE').format(new Date()).replace(/ /g, '_');
+    const filename = `brainstorm-${channelName}-${date}.txt`;
+
+    let content = `--- Brainstorm Session with ${providerName} ---\n`;
+    content += `Channel: ${channelDetails?.title || 'N/A'}\n`;
+    content += `Date: ${new Date().toLocaleString('vi-VN')}\n\n`;
+
+    chatHistory.forEach(msg => {
+        const prefix = msg.role === 'user' ? '[BẠN]' : '[AI]';
+        content += `${prefix}:\n${msg.content}\n\n--------------------------------\n\n`;
+    });
+    
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [chatHistory, provider, channelDetails]);
+  
   const providerName = provider === 'gemini' ? 'Gemini' : 'OpenAI';
 
   return (
@@ -62,7 +91,14 @@ export const BrainstormChat: React.FC<BrainstormChatProps> = ({
             </svg>
             Brainstorm cùng {providerName}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">&times;</button>
+          <div className="flex items-center gap-4">
+              <button onClick={handleDownloadChat} className="text-gray-400 hover:text-white" aria-label="Tải về cuộc trò chuyện">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+              </button>
+              <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">&times;</button>
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
