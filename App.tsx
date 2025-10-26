@@ -466,6 +466,19 @@ const App: React.FC = () => {
       }
     }
   }, [chatHistory, videos, keywords, hashtags, channelDetails, handleAiChat, generateComprehensivePrompt]);
+  
+  const handleSendToNotebookLM = useCallback(() => {
+    if (videos.length === 0) return;
+
+    const baseUrl = 'https://notebooklm.google.com/addsource';
+    const videoUrls = videos.map(video => 
+      `url=${encodeURIComponent(`https://www.youtube.com/watch?v=${video.id}`)}`
+    );
+
+    const finalUrl = `${baseUrl}?${videoUrls.join('&')}`;
+    
+    window.open(finalUrl, '_blank', 'noopener,noreferrer');
+  }, [videos]);
 
 
   return (
@@ -512,13 +525,24 @@ const App: React.FC = () => {
                      <div className="w-full space-y-3">
                         <button
                             onClick={handleBrainstormClick}
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
+                            disabled={videos.length === 0}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center disabled:bg-gray-600 disabled:cursor-not-allowed"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                                 <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
                                 <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
                             </svg>
                             Brainstorm Ý tưởng
+                        </button>
+                        <button
+                            onClick={handleSendToNotebookLM}
+                            disabled={videos.length === 0}
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 flex items-center justify-center disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
+                            </svg>
+                            Gửi tới NotebookLM
                         </button>
                         <div className="flex gap-3">
                            <button
