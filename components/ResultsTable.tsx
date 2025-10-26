@@ -66,13 +66,14 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onSort, sort
       <table className="min-w-full divide-y divide-gray-700">
         <thead className="bg-gray-800">
           <tr>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-12">#</th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-2/5">Tiêu đề Video</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">#</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Tiêu đề Video</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Mô tả Video</th>
             <SortableHeader title="Ngày đăng" sortKeyName="publishedAt" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <SortableHeader title="Lượt xem" sortKeyName="views" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <SortableHeader title="Lượt thích" sortKeyName="likes" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <SortableHeader title="Thời lượng" sortKeyName="duration" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-1/3">Tóm Tắt AI</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Tóm Tắt AI</th>
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Hành động</th>
           </tr>
         </thead>
@@ -80,8 +81,13 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onSort, sort
           {videos.map((video, index) => (
             <tr key={video.id} className="hover:bg-gray-700/30">
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 align-top">{index + 1}</td>
-              <td className="px-6 py-4 whitespace-nowrap align-top">
-                <div className="text-sm font-medium text-white">{video.title}</div>
+              <td className="px-6 py-4 align-top">
+                <div className="text-sm font-medium text-white break-words">{video.title}</div>
+              </td>
+              <td className="px-6 py-4 text-sm text-gray-400 align-top">
+                  <div className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words pr-2">
+                      {video.description || <span className="text-gray-500">Không có mô tả.</span>}
+                  </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap align-top">
                 <div className="text-sm text-gray-300">{formatDate(video.publishedAt)}</div>

@@ -202,27 +202,56 @@ const App: React.FC = () => {
   const keywords = useMemo<KeywordData[]>(() => {
     if (videos.length === 0) return [];
     
-    const stopWords = new Set(["và", "là", "của", "có", "một", "trong", "cho", "để", "với", "không", "khi", "thì", "mà", "được", "tại", "về", "này", "đó", "ra", "vào", "nhất", "làm", "sao", "phần", "tập", "a", "an", "the", "and", "is", "in", "it", "of", "for", "on", "with", "to", "i", "you", "he", "she", "they", "how", "what", "why", "top", "new", "|", "-"]);
+    // Mở rộng danh sách stop words để lọc từ thông dụng tiếng Việt và tiếng Anh tốt hơn.
+    const stopWords = new Set([
+        "và", "là", "của", "có", "một", "trong", "cho", "để", "với", "không", 
+        "khi", "thì", "mà", "được", "tại", "về", "này", "đó", "ra", "vào", 
+        "nhất", "làm", "sao", "phần", "tập", "cách", "hướng", "dẫn", "như", "thế", "nào",
+        "a", "an", "the", "and", "is", "in", "it", "of", "for", "on", "with", 
+        "to", "i", "you", "he", "she", "they", "we", "how", "what", "why", 
+        "top", "new", "|", "-", "tôi", "bạn", "đã"
+    ]);
 
-    const wordCounts: { [key: string]: number } = {};
+    const phraseCounts: { [key: string]: number } = {};
 
     videos.forEach(video => {
-        const words = video.title
+        // Làm sạch tiêu đề hiệu quả hơn
+        const title = video.title
             .toLowerCase()
-            .replace(/[^\p{L}\s\d]/gu, '') // Remove punctuation, keep letters and numbers
-            .split(/\s+/);
+            .replace(/[^\p{L}\s\d]/gu, ' ') // Thay thế tất cả ký tự không phải chữ/số/khoảng trắng bằng một khoảng trắng
+            .replace(/\s+/g, ' ') // Gộp nhiều khoảng trắng thành một
+            .trim();
 
-        words.forEach(word => {
-            if (word && !stopWords.has(word) && isNaN(Number(word))) {
-                wordCounts[word] = (wordCounts[word] || 0) + 1;
+        const words = title.split(' ');
+        const n = words.length;
+
+        // Tạo các n-gram (cụm từ dài 1, 2, và 3 từ)
+        for (let i = 0; i < n; i++) {
+            for (let j = 1; j <= 3 && i + j <= n; j++) {
+                const phraseWords = words.slice(i, i + j);
+                const phrase = phraseWords.join(' ');
+                
+                // Một cụm từ được coi là có ý nghĩa nếu nó chứa ít nhất một từ không phải là stopword và không phải là số.
+                const isMeaningful = phraseWords.some(word => !stopWords.has(word) && isNaN(Number(word)));
+                
+                // Các từ đơn nên có độ dài tối thiểu để tránh nhiễu như 'à', 'ờ'.
+                const isShortSingleWord = j === 1 && phrase.length < 3;
+                
+                if (isMeaningful && !isShortSingleWord) {
+                    phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
+                }
             }
-        });
+        }
     });
 
-    return Object.entries(wordCounts)
-        .sort(([, countA], [, countB]) => countB - countA)
-        .slice(0, 15)
-        .map(([text, count]) => ({ text, count }));
+    // Lọc bỏ các cụm từ chỉ xuất hiện một lần, vì chúng thường là nhiễu.
+    const filteredPhrases = Object.entries(phraseCounts)
+        .filter(([, count]) => count > 1);
+
+    return filteredPhrases
+      .sort(([, countA], [, countB]) => countB - countA)
+      .slice(0, 20) // Hiển thị 20 kết quả hàng đầu
+      .map(([text, count]) => ({ text, count }));
   }, [videos]);
 
   const handleAiChat = useCallback(async (history: ChatMessage[]) => {

@@ -2,6 +2,7 @@
 export interface VideoData {
   id: string;
   title: string;
+  description: string;
   publishedAt: string;
   views: number;
   likes: number;

@@ -121,6 +121,7 @@ export async function getVideoDetails(videoIds: string[], apiKey: string): Promi
     return data.items.map((item: any) => ({
         id: item.id,
         title: item.snippet.title,
+        description: item.snippet.description,
         publishedAt: item.snippet.publishedAt,
         views: parseInt(item.statistics.viewCount, 10) || 0,
         likes: parseInt(item.statistics.likeCount, 10) || 0,
