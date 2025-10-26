@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import type { VideoData, AiProvider } from './types';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import type { VideoData, AiProvider, SortKey, SortOrder } from './types';
 import { fetchChannelVideos } from './services/youtubeService';
 import { ResultsTable } from './components/ResultsTable';
 import { UrlInputForm } from './components/UrlInputForm';
@@ -13,6 +13,8 @@ const App: React.FC = () => {
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('publishedAt');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   // State for API Management
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,6 +57,9 @@ const App: React.FC = () => {
         return;
       }
       setVideos(initialVideos);
+      // Reset sort to default when new data is fetched
+      setSortKey('publishedAt');
+      setSortOrder('desc');
       
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Đã xảy ra lỗi không xác định.';
@@ -64,6 +69,39 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, [channelUrl, youtubeApiKey]);
+
+  const handleSort = useCallback((key: SortKey) => {
+    if (sortKey === key) {
+        setSortOrder(prevOrder => prevOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+        setSortKey(key);
+        setSortOrder('desc'); // Luôn bắt đầu bằng sắp xếp giảm dần cho cột mới
+    }
+  }, [sortKey]);
+
+  const sortedVideos = useMemo(() => {
+    if (!videos) return [];
+    return [...videos].sort((a, b) => {
+        let valA, valB;
+
+        if (sortKey === 'publishedAt') {
+            valA = new Date(a.publishedAt).getTime();
+            valB = new Date(b.publishedAt).getTime();
+        } else {
+            valA = a[sortKey];
+            valB = b[sortKey];
+        }
+
+        if (valA < valB) {
+            return sortOrder === 'asc' ? -1 : 1;
+        }
+        if (valA > valB) {
+            return sortOrder === 'asc' ? 1 : -1;
+        }
+        return 0;
+    });
+  }, [videos, sortKey, sortOrder]);
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
@@ -88,7 +126,12 @@ const App: React.FC = () => {
 
           {videos.length > 0 && (
             <>
-              <ResultsTable videos={videos} />
+              <ResultsTable 
+                videos={sortedVideos} 
+                onSort={handleSort}
+                sortKey={sortKey}
+                sortOrder={sortOrder}
+              />
             </>
           )}
         </div>

@@ -10,3 +10,6 @@ export interface VideoData {
 }
 
 export type AiProvider = 'gemini' | 'openai';
+
+export type SortKey = 'publishedAt' | 'views' | 'likes';
+export type SortOrder = 'asc' | 'desc';

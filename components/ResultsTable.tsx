@@ -1,8 +1,11 @@
 import React from 'react';
-import type { VideoData } from '../types';
+import type { VideoData, SortKey, SortOrder } from '../types';
 
 interface ResultsTableProps {
   videos: VideoData[];
+  onSort: (key: SortKey) => void;
+  sortKey: SortKey;
+  sortOrder: SortOrder;
 }
 
 const StatIcon: React.FC<{ path: string; className?: string }> = ({ path, className }) => (
@@ -32,22 +35,50 @@ const formatDate = (dateString: string): string => {
   }).format(new Date(dateString));
 };
 
-export const ResultsTable: React.FC<ResultsTableProps> = ({ videos }) => {
+const SortableHeader: React.FC<{
+  title: string;
+  sortKeyName: SortKey;
+  onSort: (key: SortKey) => void;
+  currentSortKey: SortKey;
+  currentSortOrder: SortOrder;
+  className?: string;
+}> = ({ title, sortKeyName, onSort, currentSortKey, currentSortOrder, className }) => {
+    const isSorting = currentSortKey === sortKeyName;
+    const icon = isSorting ? (currentSortOrder === 'asc' ? '▲' : '▼') : '';
+    return (
+        <th 
+            scope="col" 
+            className={`px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition-colors ${className}`}
+            onClick={() => onSort(sortKeyName)}
+            aria-sort={isSorting ? (currentSortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+        >
+            <div className="flex items-center">
+                {title}
+                <span className="ml-2 w-4 text-center">{icon}</span>
+            </div>
+        </th>
+    );
+};
+
+export const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onSort, sortKey, sortOrder }) => {
   return (
     <div className="overflow-x-auto bg-gray-800/50 border border-gray-700 rounded-lg shadow-xl backdrop-blur-sm mt-4">
       <table className="min-w-full divide-y divide-gray-700">
         <thead className="bg-gray-800">
           <tr>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-12">#</th>
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-2/5">Tiêu đề Video</th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ngày đăng</th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Thống kê</th>
+            <SortableHeader title="Ngày đăng" sortKeyName="publishedAt" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
+            <SortableHeader title="Lượt xem" sortKeyName="views" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
+            <SortableHeader title="Lượt thích" sortKeyName="likes" onSort={onSort} currentSortKey={sortKey} currentSortOrder={sortOrder} />
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Thời lượng</th>
             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Hành động</th>
           </tr>
         </thead>
         <tbody className="bg-gray-800 divide-y divide-gray-700">
-          {videos.map((video) => (
-            <tr key={video.id}>
+          {videos.map((video, index) => (
+            <tr key={video.id} className="hover:bg-gray-700/30">
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{index + 1}</td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="text-sm font-medium text-white">{video.title}</div>
               </td>
@@ -55,10 +86,10 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ videos }) => {
                 <div className="text-sm text-gray-300">{formatDate(video.publishedAt)}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex flex-col text-sm text-gray-300 space-y-2">
-                    <span className="flex items-center"><ViewIcon /> {formatNumber(video.views)}</span>
-                    <span className="flex items-center"><LikeIcon /> {formatNumber(video.likes)}</span>
-                </div>
+                 <span className="flex items-center text-sm text-gray-300"><ViewIcon /> {formatNumber(video.views)}</span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="flex items-center text-sm text-gray-300"><LikeIcon /> {formatNumber(video.likes)}</span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="flex items-center text-sm text-gray-300">
