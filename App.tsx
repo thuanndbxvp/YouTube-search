@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage } from './types';
+import type { VideoData, AiProvider, SortKey, SortOrder, KeywordData, ChatMessage, HashtagData } from './types';
 import { getChannelIdFromUrl, getUploadsPlaylistId, getPaginatedVideoIds, getVideoDetails } from './services/youtubeService';
 import { generateChatResponse as generateOpenaiChatResponse } from './services/openaiService';
 import { ResultsTable } from './components/ResultsTable';
@@ -11,6 +11,7 @@ import { ApiManagementModal } from './components/ApiManagementModal';
 import { ProviderSelector } from './components/ProviderSelector';
 import { KeywordAnalysis } from './components/KeywordAnalysis';
 import { BrainstormChat } from './components/BrainstormChat';
+import { HashtagModal } from './components/HashtagModal';
 import { GoogleGenAI } from '@google/genai';
 
 const App: React.FC = () => {
@@ -35,6 +36,7 @@ const App: React.FC = () => {
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
   const [isMoreLoading, setIsMoreLoading] = useState<boolean>(false);
   const [isBrainstormOpen, setIsBrainstormOpen] = useState<boolean>(false);
+  const [isHashtagModalOpen, setIsHashtagModalOpen] = useState<boolean>(false);
 
   // Load API settings from localStorage on initial render
   useEffect(() => {
@@ -161,7 +163,6 @@ const App: React.FC = () => {
   const keywords = useMemo<KeywordData[]>(() => {
     if (videos.length === 0) return [];
     
-    // Mở rộng danh sách stop words để lọc từ thông dụng tiếng Việt và tiếng Anh tốt hơn.
     const stopWords = new Set([
         "và", "là", "của", "có", "một", "trong", "cho", "để", "với", "không", 
         "khi", "thì", "mà", "được", "tại", "về", "này", "đó", "ra", "vào", 
@@ -174,26 +175,21 @@ const App: React.FC = () => {
     const phraseCounts: { [key: string]: number } = {};
 
     videos.forEach(video => {
-        // Làm sạch tiêu đề hiệu quả hơn
         const title = video.title
             .toLowerCase()
-            .replace(/[^\p{L}\s\d]/gu, ' ') // Thay thế tất cả ký tự không phải chữ/số/khoảng trắng bằng một khoảng trắng
-            .replace(/\s+/g, ' ') // Gộp nhiều khoảng trắng thành một
+            .replace(/[^\p{L}\s\d]/gu, ' ')
+            .replace(/\s+/g, ' ')
             .trim();
 
         const words = title.split(' ');
         const n = words.length;
 
-        // Tạo các n-gram (cụm từ dài 1, 2, và 3 từ)
         for (let i = 0; i < n; i++) {
             for (let j = 1; j <= 3 && i + j <= n; j++) {
                 const phraseWords = words.slice(i, i + j);
                 const phrase = phraseWords.join(' ');
                 
-                // Một cụm từ được coi là có ý nghĩa nếu nó chứa ít nhất một từ không phải là stopword và không phải là số.
                 const isMeaningful = phraseWords.some(word => !stopWords.has(word) && isNaN(Number(word)));
-                
-                // Các từ đơn nên có độ dài tối thiểu để tránh nhiễu như 'à', 'ờ'.
                 const isShortSingleWord = j === 1 && phrase.length < 3;
                 
                 if (isMeaningful && !isShortSingleWord) {
@@ -203,22 +199,41 @@ const App: React.FC = () => {
         }
     });
 
-    // Lọc bỏ các cụm từ chỉ xuất hiện một lần, vì chúng thường là nhiễu.
     const filteredPhrases = Object.entries(phraseCounts)
         .filter(([, count]) => count > 1);
 
     return filteredPhrases
       .sort(([, countA], [, countB]) => countB - countA)
-      .slice(0, 20) // Hiển thị 20 kết quả hàng đầu
+      .slice(0, 20)
       .map(([text, count]) => ({ text, count }));
+  }, [videos]);
+
+  const hashtags = useMemo<HashtagData[]>(() => {
+    if (videos.length === 0) return [];
+    
+    const hashtagCounts: { [key: string]: number } = {};
+    const hashtagRegex = /#[\w\p{L}]+/gu;
+
+    videos.forEach(video => {
+        if (video.description) {
+            const matches = video.description.match(hashtagRegex);
+            if (matches) {
+                matches.forEach(tag => {
+                    const cleanedTag = tag.toLowerCase();
+                    hashtagCounts[cleanedTag] = (hashtagCounts[cleanedTag] || 0) + 1;
+                });
+            }
+        }
+    });
+
+    return Object.entries(hashtagCounts)
+        .map(([text, count]) => ({ text, count }))
+        .sort((a, b) => b.count - a.count);
   }, [videos]);
 
   const handleAiChat = useCallback(async (history: ChatMessage[]) => {
     if (selectedProvider === 'gemini') {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        // Gemini chat is stateful, so we'll just send the last user message for simplicity
-        // For a true conversational experience, the component would manage a `chat` instance.
-        // Here, we simulate by sending history within the prompt.
          const chat = ai.chats.create({
             model: selectedGeminiModel,
             history: history.slice(0, -1).map(msg => ({
@@ -269,18 +284,30 @@ const App: React.FC = () => {
                     <KeywordAnalysis keywords={keywords} />
                   </div>
                   <div className="flex flex-col items-center justify-center text-center">
-                    <h3 className="text-lg font-semibold text-white mb-3">Sáng tạo ý tưởng mới</h3>
-                    <p className="text-sm text-gray-400 mb-4">Dùng AI để phát triển ý tưởng cho một kênh mới dựa trên phân tích này.</p>
-                     <button
-                        onClick={() => setIsBrainstormOpen(true)}
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
-                      >
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                           <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                           <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                         </svg>
-                        Brainstorm Ý tưởng
-                      </button>
+                    <h3 className="text-lg font-semibold text-white mb-3">Công cụ Phân tích & Sáng tạo</h3>
+                    <p className="text-sm text-gray-400 mb-4">Sử dụng các công cụ để hiểu sâu hơn về kênh và tìm kiếm ý tưởng mới.</p>
+                     <div className="w-full space-y-3">
+                        <button
+                            onClick={() => setIsBrainstormOpen(true)}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                            </svg>
+                            Brainstorm Ý tưởng
+                        </button>
+                         <button
+                            onClick={() => setIsHashtagModalOpen(true)}
+                            disabled={hashtags.length === 0}
+                            className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 flex items-center justify-center"
+                          >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                            </svg>
+                            Liệt kê các thẻ tag
+                          </button>
+                    </div>
                   </div>
               </div>
 
@@ -321,6 +348,7 @@ const App: React.FC = () => {
         setSelectedOpenaiModel={setSelectedOpenaiModel}
       />
       {videos.length > 0 && (
+        <>
           <BrainstormChat
             isOpen={isBrainstormOpen}
             onClose={() => setIsBrainstormOpen(false)}
@@ -328,6 +356,12 @@ const App: React.FC = () => {
             onSendMessage={handleAiChat}
             provider={selectedProvider}
           />
+          <HashtagModal
+            isOpen={isHashtagModalOpen}
+            onClose={() => setIsHashtagModalOpen(false)}
+            hashtags={hashtags}
+          />
+        </>
       )}
     </div>
   );

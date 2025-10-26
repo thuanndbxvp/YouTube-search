@@ -19,6 +19,11 @@ export interface KeywordData {
   count: number;
 }
 
+export interface HashtagData {
+  text: string;
+  count: number;
+}
+
 export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
