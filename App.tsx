@@ -442,7 +442,11 @@ Hãy bắt đầu ngay bây giờ.
 
     handleAiChat([analysisMessage])
         .then(response => {
-            setChatHistory([{ role: 'model', content: response }]);
+            const fullHistory: ChatMessage[] = [
+                analysisMessage,
+                { role: 'model', content: response }
+            ];
+            setChatHistory(fullHistory);
         })
         .catch(err => {
             const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";

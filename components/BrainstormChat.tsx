@@ -30,6 +30,10 @@ export const BrainstormChat: React.FC<BrainstormChatProps> = ({
     }
   }, [isOpen, chatHistory]);
 
+  const displayedHistory = chatHistory.length > 1 && chatHistory[0].role === 'user'
+    ? chatHistory.slice(1)
+    : chatHistory;
+
   if (!isOpen) return null;
 
   const handleSend = async () => {
@@ -102,7 +106,7 @@ export const BrainstormChat: React.FC<BrainstormChatProps> = ({
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {chatHistory.map((msg, index) => (
+          {displayedHistory.map((msg, index) => (
             <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-lg p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'}`}>
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
