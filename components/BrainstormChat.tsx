@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { KeywordData, ChatMessage, AiProvider } from '../types';
+import type { ChatMessage, AiProvider } from '../types';
 
 interface BrainstormChatProps {
   isOpen: boolean;
   onClose: () => void;
-  keywords: KeywordData[];
+  chatHistory: ChatMessage[];
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onSendMessage: (history: ChatMessage[]) => Promise<string>;
   provider: AiProvider;
 }
@@ -12,56 +13,20 @@ interface BrainstormChatProps {
 export const BrainstormChat: React.FC<BrainstormChatProps> = ({
   isOpen,
   onClose,
-  keywords,
+  chatHistory,
+  setChatHistory,
   onSendMessage,
   provider,
 }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // For user-sent messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const getInitialPrompt = (): string => {
-    const topKeywords = keywords.slice(0, 5).map(k => k.text).join(', ');
-    return `Bạn là một nhà chiến lược sáng tạo nội dung YouTube. Dựa trên phân tích một kênh có các chủ đề chính xoay quanh **"${topKeywords}"**, hãy giúp tôi brainstorm ý tưởng cho một kênh YouTube mới.
-    
-Bắt đầu bằng cách đề xuất 3 hướng đi (concept) độc đáo cho một kênh tương tự nhưng có sự khác biệt để nổi bật. Trình bày mỗi concept với một tiêu đề hấp dẫn và một đoạn mô tả ngắn.`;
-  };
-
   useEffect(() => {
-    if (isOpen && keywords.length > 0) {
-      const initialPrompt = getInitialPrompt();
-      setMessages([{ role: 'model', content: "Chào bạn! Hãy cùng sáng tạo nhé. Dựa trên phân tích, đây là một vài ý tưởng ban đầu..." }]);
-      
-      const initialHistory: ChatMessage[] = [
-        { role: 'user', content: initialPrompt }
-      ];
-
-      setIsLoading(true);
-      onSendMessage(initialHistory)
-        .then(response => {
-          setMessages([{ role: 'model', content: response }]);
-        })
-        .catch(err => {
-            const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
-            setMessages([{ role: 'model', content: `Xin lỗi, đã có lỗi xảy ra: ${errorMessage}` }]);
-        })
-        .finally(() => setIsLoading(false));
+    if (isOpen) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, keywords, onSendMessage]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-  
-  // Reset state when modal is closed to ensure it's fresh for the next session
-  useEffect(() => {
-    if (!isOpen) {
-        setMessages([]);
-        setInput('');
-    }
-  }, [isOpen]);
+  }, [isOpen, chatHistory]);
 
   if (!isOpen) return null;
 
@@ -69,17 +34,17 @@ Bắt đầu bằng cách đề xuất 3 hướng đi (concept) độc đáo cho
     if (!input.trim() || isLoading) return;
     
     const userMessage: ChatMessage = { role: 'user', content: input };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    const newHistory = [...chatHistory, userMessage];
+    setChatHistory(newHistory);
     setInput('');
     setIsLoading(true);
 
     try {
-        const response = await onSendMessage(newMessages);
-        setMessages(prev => [...prev, { role: 'model', content: response }]);
+        const response = await onSendMessage(newHistory);
+        setChatHistory([...newHistory, { role: 'model', content: response }]);
     } catch(err) {
         const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
-        setMessages(prev => [...prev, { role: 'model', content: `Rất tiếc, tôi không thể trả lời lúc này: ${errorMessage}` }]);
+        setChatHistory([...newHistory, { role: 'model', content: `Rất tiếc, tôi không thể trả lời lúc này: ${errorMessage}` }]);
     } finally {
         setIsLoading(false);
     }
@@ -101,7 +66,7 @@ Bắt đầu bằng cách đề xuất 3 hướng đi (concept) độc đáo cho
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((msg, index) => (
+          {chatHistory.map((msg, index) => (
             <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-lg p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'}`}>
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>

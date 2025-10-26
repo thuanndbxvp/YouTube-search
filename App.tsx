@@ -40,6 +40,7 @@ const App: React.FC = () => {
   const [isHashtagModalOpen, setIsHashtagModalOpen] = useState<boolean>(false);
   const [channelDetails, setChannelDetails] = useState<ChannelDetails | null>(null);
   const [isChannelInfoModalOpen, setIsChannelInfoModalOpen] = useState<boolean>(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
 
   // Load API settings from localStorage on initial render
@@ -118,6 +119,7 @@ const App: React.FC = () => {
     setNextPageToken(undefined);
     setUploadsPlaylistId(null);
     setChannelDetails(null);
+    setChatHistory([]); // Reset brainstorm chat on new analysis
 
     try {
       const channelId = await getChannelIdFromUrl(channelUrl, youtubeApiKey);
@@ -311,6 +313,65 @@ const App: React.FC = () => {
     }
   }, [selectedProvider, geminiApiKey, openaiApiKey, selectedGeminiModel, selectedOpenaiModel]);
 
+  const generateComprehensivePrompt = useCallback((
+    videos: VideoData[], 
+    keywords: KeywordData[], 
+    hashtags: HashtagData[], 
+    channelDetails: ChannelDetails | null
+  ): string => {
+      const topVideos = [...videos].sort((a,b) => b.views - a.views).slice(0, 5);
+      
+      let prompt = `Bạn là một nhà chiến lược sáng tạo nội dung YouTube. Tôi đã phân tích một kênh và có các dữ liệu sau:\n\n`;
+  
+      if (channelDetails) {
+          prompt += `--- THÔNG TIN KÊNH ---\n`;
+          prompt += `Tên kênh: ${channelDetails.title}\n`;
+          prompt += `Mô tả: ${channelDetails.description.substring(0, 300)}...\n\n`;
+      }
+  
+      prompt += `--- CÁC VIDEO NỔI BẬT NHẤT (THEO LƯỢT XEM) ---\n`;
+      topVideos.forEach((v, i) => {
+          prompt += `${i + 1}. Tiêu đề: "${v.title}" (Lượt xem: ${v.views.toLocaleString('vi-VN')}, Lượt thích: ${v.likes.toLocaleString('vi-VN')})\n`;
+      });
+      prompt += `\n`;
+  
+      if (keywords.length > 0) {
+          prompt += `--- CÁC TỪ KHÓA CHÍNH TRONG TIÊU ĐỀ ---\n`;
+          prompt += `${keywords.map(k => k.text).join(', ')}\n\n`;
+      }
+  
+      if (hashtags.length > 0) {
+          prompt += `--- CÁC HASHTAG PHỔ BIẾN ---\n`;
+          prompt += `${hashtags.slice(0, 10).map(h => h.text).join(' ')}\n\n`;
+      }
+  
+      prompt += `--- YÊU CẦU ---\n`;
+      prompt += `Dựa trên toàn bộ dữ liệu trên, hãy giúp tôi brainstorm ý tưởng.\n`;
+      prompt += `Bắt đầu bằng cách đề xuất 3 hướng đi (concept) độc đáo cho một kênh tương tự nhưng có sự khác biệt để nổi bật. Trình bày mỗi concept với một tiêu đề hấp dẫn và một đoạn mô tả ngắn gọn về nội dung và đối tượng khán giả.`;
+  
+      return prompt;
+  }, []);
+
+  const handleBrainstormClick = useCallback(async () => {
+    setIsBrainstormOpen(true);
+
+    // If chat is empty and we have data, start the initial brainstorm session
+    if (chatHistory.length === 0 && videos.length > 0) {
+      setChatHistory([{ role: 'model', content: "Đang phân tích dữ liệu kênh để đưa ra ý tưởng..." }]);
+      
+      try {
+        const comprehensivePrompt = generateComprehensivePrompt(videos, keywords, hashtags, channelDetails);
+        const initialHistory: ChatMessage[] = [{ role: 'user', content: comprehensivePrompt }];
+        const response = await handleAiChat(initialHistory);
+        // The user prompt is part of the context, so we don't show it. We start with the AI's response.
+        setChatHistory([{ role: 'model', content: response }]);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Lỗi không xác định";
+        setChatHistory([{ role: 'model', content: `Xin lỗi, đã có lỗi xảy ra khi tạo ý tưởng ban đầu: ${errorMessage}` }]);
+      }
+    }
+  }, [chatHistory, videos, keywords, hashtags, channelDetails, handleAiChat, generateComprehensivePrompt]);
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
@@ -360,7 +421,7 @@ const App: React.FC = () => {
                             Thống kê Kênh
                         </button>
                         <button
-                            onClick={() => setIsBrainstormOpen(true)}
+                            onClick={handleBrainstormClick}
                             className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -434,7 +495,8 @@ const App: React.FC = () => {
           <BrainstormChat
             isOpen={isBrainstormOpen}
             onClose={() => setIsBrainstormOpen(false)}
-            keywords={keywords}
+            chatHistory={chatHistory}
+            setChatHistory={setChatHistory}
             onSendMessage={handleAiChat}
             provider={selectedProvider}
           />
