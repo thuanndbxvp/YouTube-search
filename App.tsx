@@ -382,7 +382,7 @@ const App: React.FC = () => {
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 p-6 bg-gray-800/50 border border-gray-700 rounded-lg">
                   <div className="md:col-span-2">
-                    <KeywordAnalysis keywords={keywords} channelDetails={channelDetails} />
+                    <KeywordAnalysis keywords={keywords} channelDetails={channelDetails} videos={sortedVideos} />
                   </div>
                   <div className="flex flex-col items-center justify-center text-center">
                     <h3 className="text-lg font-semibold text-white mb-3">Công cụ Phân tích & Sáng tạo</h3>
