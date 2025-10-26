@@ -271,28 +271,6 @@ const App: React.FC = () => {
         .sort((a, b) => b.count - a.count);
   }, [videos]);
   
-  const handleDownloadKeywordsCsv = useCallback(() => {
-    if (keywords.length === 0) return;
-    
-    // Use semicolon as delimiter for better Excel compatibility
-    let csvContent = "STT;Key;Số lần hiển thị\n"; 
-    keywords.forEach((keyword, index) => {
-      // Escape double quotes by replacing them with two double quotes
-      const escapedText = keyword.text.replace(/"/g, '""');
-      csvContent += `${index + 1};"${escapedText}";${keyword.count}\n`;
-    });
-
-    // Use BOM for Excel to recognize UTF-8 correctly
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "tu-khoa-noi-bat.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [keywords]);
-
   const handleAiChat = useCallback(async (history: ChatMessage[]) => {
     if (selectedProvider === 'gemini') {
         if (!geminiApiKey) throw new Error("Vui lòng cung cấp API Key của Gemini trong phần 'Quản lý API'.");
@@ -404,22 +382,12 @@ const App: React.FC = () => {
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 p-6 bg-gray-800/50 border border-gray-700 rounded-lg">
                   <div className="md:col-span-2">
-                    <KeywordAnalysis keywords={keywords} />
+                    <KeywordAnalysis keywords={keywords} channelDetails={channelDetails} />
                   </div>
                   <div className="flex flex-col items-center justify-center text-center">
                     <h3 className="text-lg font-semibold text-white mb-3">Công cụ Phân tích & Sáng tạo</h3>
                     <p className="text-sm text-gray-400 mb-4">Sử dụng các công cụ để hiểu sâu hơn về kênh và tìm kiếm ý tưởng mới.</p>
                      <div className="w-full space-y-3">
-                        <button
-                          onClick={() => setIsChannelInfoModalOpen(true)}
-                          disabled={!channelDetails}
-                          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 flex items-center justify-center"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                            Thống kê Kênh
-                        </button>
                         <button
                             onClick={handleBrainstormClick}
                             className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 flex items-center justify-center"
@@ -430,26 +398,28 @@ const App: React.FC = () => {
                             </svg>
                             Brainstorm Ý tưởng
                         </button>
-                         <button
-                            onClick={() => setIsHashtagModalOpen(true)}
-                            disabled={hashtags.length === 0}
-                            className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 flex items-center justify-center"
-                          >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                            </svg>
-                            Liệt kê các thẻ tag
-                          </button>
-                          <button
-                            onClick={handleDownloadKeywordsCsv}
-                            disabled={keywords.length === 0}
-                            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 flex items-center justify-center"
-                          >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                            Tải về Từ khóa (.csv)
-                          </button>
+                        <div className="flex gap-3">
+                           <button
+                              onClick={() => setIsChannelInfoModalOpen(true)}
+                              disabled={!channelDetails}
+                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 flex items-center justify-center"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                Thống kê
+                            </button>
+                             <button
+                                onClick={() => setIsHashtagModalOpen(true)}
+                                disabled={hashtags.length === 0}
+                                className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 flex items-center justify-center"
+                              >
+                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                                </svg>
+                                Thẻ tag
+                              </button>
+                        </div>
                     </div>
                   </div>
               </div>
